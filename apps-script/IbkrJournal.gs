@@ -7,6 +7,9 @@
  * reload the sheet, then use the "IBKR Journal" menu:
  *
  *   1. Set up Type / Status dropdowns   - wheel tabs + Bull PUT SPREAD TRACKER
+ *   -  Set up headline metrics             - BPS top stats (credit collected / paid,
+ *                                          commission, net premium) + bigger Net
+ *                                          premium / Realised P&L on every tab
  *   2. Install hourly import            - run once; checks the feed folder
  *   3. Import IBKR feed now             - same thing, on demand
  *   4. Push ticked inbox rows           - writes ticked rows into the tabs
@@ -40,11 +43,22 @@ var IJ = {
   // wheel tab layout (1-based columns)
   W: { HDR: 7, FIRST: 8, DATE: 1, TYPE: 2, SYM: 3, EXP: 4, STRIKE: 5, QTY: 7, OPEN: 8,
        CLOSED: 11, CLOSE: 12, STATUS: 15, COMM: 16, CHECK: 24, LAST_COL: 24 },
-  // BPS tracker layout
-  B: { HDR: 5, FIRST: 6, DATE: 1, STATUS: 2, SYM: 3, EXP: 4, STRAT: 5, QTY: 6,
-       SHORT: 9, LONG: 10, ENTRY: 11, EXIT_DATE: 13, EXIT: 17, NOTES2: 32,
-       BE: 33, LAST_COL: 36 },             // AG..AJ = breakeven block
+  // BPS tracker: header row / first trade row. Columns are found by their row-5 header
+  // (see BPS_HDR) so inserting or moving a column never breaks the import.
+  B: { HDR: 5, FIRST: 6 },
+  BPS_HDR: {
+    DATE: /^Trade Date/i,          STATUS: /^Status$/i,          SYM: /^Stock/i,
+    EXP: /^Expiration/i,           STRAT: /^Strategy$/i,         QTY: /^No\.?$/i,
+    PX_OPEN: /^Stock Price @ ?Open/i, SHORT: /^Strike ?1/i,      LONG: /^Strike ?2/i,
+    ENTRY: /^Entry Price/i,        RISK: /^Capi?ti?al at Risk/i,   EXIT_DATE: /^Exit Date/i,
+    DTE_PCT: /^% DTE Completed/i,  DAYS: /^Days in Trade/i,      EXIT: /CLOSING Price/i,
+    PNL: /^P&L ?\(realised\)/i,   ROC: /^ROC/i,                 NOTES: /^Notes$/i,
+    COMM: /^Commission$/i
+  },
   BPS_PREFILL: 200,                       // per-row live-price formulas down to this row
+
+  // headline cells: big font + yellow so they stand out
+  KEY_LABEL_BG: '#ffe599', KEY_VALUE_BG: '#fff2cc', KEY_FONT: 20,
 
   INBOX_HDR: ['Push?', 'Result', 'Trade time (GMT+2)', 'Action', 'Tab', 'Target row', 'Symbol',
               'Type', 'Status', 'Expiry', 'Strike', 'Long strike', 'Qty', 'Price', 'Commission',
@@ -54,6 +68,7 @@ var IJ = {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('IBKR Journal')
     .addItem('Set up Type / Status dropdowns', 'ij_setupDropdowns')
+    .addItem('Set up headline metrics (BPS + wheel tabs)', 'ij_setupMetrics')
     .addItem('Add breakeven columns (BPS tracker)', 'ij_setupBreakeven')
     .addSeparator()
     .addItem('Import IBKR feed now', 'ij_importFeed')
@@ -97,9 +112,32 @@ function ij_applyWheelValidation_(sh) {
 }
 
 function ij_applyBpsValidation_(sh) {
-  var n = sh.getMaxRows() - IJ.B.FIRST + 1;
-  sh.getRange(IJ.B.FIRST, IJ.B.STATUS, n, 1).setDataValidation(ij_list_(IJ.BPS_STATUS));
-  sh.getRange(IJ.B.FIRST, IJ.B.STRAT, n, 1).setDataValidation(ij_list_(IJ.BPS_STRATEGY));
+  var B = ij_bpsCols_(sh), n = sh.getMaxRows() - IJ.B.FIRST + 1;
+  sh.getRange(IJ.B.FIRST, B.STATUS, n, 1).setDataValidation(ij_list_(IJ.BPS_STATUS));
+  sh.getRange(IJ.B.FIRST, B.STRAT, n, 1).setDataValidation(ij_list_(IJ.BPS_STRATEGY));
+}
+
+/** BPS column numbers keyed like IJ.BPS_HDR (first matching header wins); LAST_COL = last header. */
+function ij_bpsCols_(sh) {
+  var h = sh.getRange(IJ.B.HDR, 1, 1, sh.getMaxColumns()).getDisplayValues()[0];
+  var out = { LAST_COL: 0 };
+  h.forEach(function (v, i) {
+    v = String(v).trim();
+    if (!v) return;
+    out.LAST_COL = i + 1;
+    Object.keys(IJ.BPS_HDR).forEach(function (k) {
+      if (!out[k] && IJ.BPS_HDR[k].test(v)) out[k] = i + 1;
+    });
+  });
+  return out;
+}
+
+/** Same as ij_bpsCols_ but throws naming any of `need` that is missing. */
+function ij_bpsNeed_(sh, need) {
+  var B = ij_bpsCols_(sh);
+  var miss = need.filter(function (k) { return !B[k]; });
+  if (miss.length) throw new Error(sh.getName() + ': no header found for ' + miss.join(', '));
+  return B;
 }
 
 function ij_setupDropdowns() {
@@ -112,56 +150,165 @@ function ij_setupDropdowns() {
            'IBKR Journal', 8);
 }
 
+/* ---------------------------------------------------------- headline metrics */
+
+/**
+ * BPS tracker rows 2-3 become (left to right):
+ *   Spreads traded | Open | Closed | Credit collected | Credit paid (to close) |
+ *   Commission | NET PREMIUM | REALISED P&L | Win rate | Avg ROC | Rolled |
+ *   Capital at risk | Max profit still open | Avg days held | Avg % of DTE used
+ * Net premium = credit collected - credit paid (commission shown separately, not deducted).
+ * Realised P&L (column T and the stat) is after commission.
+ * Adds a Commission input column after the last header if there is none.
+ * Wheel tabs: Net premium + Realised option P/L get a big font and yellow fill.
+ * Safe to re-run.
+ */
+function ij_setupMetrics() {
+  var ss = SpreadsheetApp.getActive();
+  var bps = ss.getSheetByName(IJ.BPS_TAB);
+  if (bps) ij_setupBpsStats_(bps);
+  var tabs = ij_wheelTabs_(ss);
+  tabs.forEach(ij_highlightWheel_);
+  ss.toast('Headline metrics set on ' + tabs.length + ' wheel tabs' + (bps ? ' + BPS tracker' : ''),
+           'IBKR Journal', 8);
+}
+
+function ij_setupBpsStats_(sh) {
+  var F = IJ.B.FIRST, L = sh.getMaxRows();
+  var B = ij_bpsCols_(sh);
+  if (!B.COMM) {                                   // new input column after the last header
+    var c = B.LAST_COL + 1;
+    if (sh.getMaxColumns() < c) sh.insertColumnsAfter(sh.getMaxColumns(), c - sh.getMaxColumns());
+    sh.getRange(IJ.B.HDR, B.LAST_COL).copyTo(sh.getRange(IJ.B.HDR, c), { formatOnly: true });
+    sh.getRange(IJ.B.HDR, c).setValue('Commission');
+    sh.getRange(F, B.QTY, L - F + 1, 1).copyTo(sh.getRange(F, c, L - F + 1, 1), { formatOnly: true });
+    sh.getRange(F, c, L - F + 1, 1).setNumberFormat('$#,##0.00');
+  }
+  B = ij_bpsNeed_(sh, ['DATE', 'STATUS', 'QTY', 'ENTRY', 'RISK', 'DTE_PCT', 'DAYS', 'EXIT',
+                       'PNL', 'ROC', 'COMM']);
+
+  // per-row realised P&L after commission: rewrite every formula cell in the P&L column
+  var A = ij_a1_, r, pnl = sh.getRange(F, B.PNL, L - F + 1, 1).getFormulas();
+  for (var i = 0; i < pnl.length; i++) {
+    if (!pnl[i][0]) continue;
+    r = F + i;
+    pnl[i][0] = '=IF(OR($' + A(B.STATUS) + r + '="Closed",$' + A(B.STATUS) + r + '="Rolled"),' +
+                '($' + A(B.ENTRY) + r + '-$' + A(B.EXIT) + r + ')*$' + A(B.QTY) + r + '*100' +
+                '-N($' + A(B.COMM) + r + '),"")';
+  }
+  sh.getRange(F, B.PNL, pnl.length, 1).setFormulas(pnl);
+
+  var rg = function (c) { return '$' + A(c) + '$' + F + ':$' + A(c) + '$' + L; };
+  var st = rg(B.STATUS);
+  var cr = function (c) { return '(SUMIFS(' + rg(c) + ',' + st + ',"Closed")+SUMIFS(' + rg(c) + ',' + st + ',"Rolled"))'; };
+  var n = '(COUNTIF(' + st + ',"Closed")+COUNTIF(' + st + ',"Rolled"))';
+  var avg = function (c) { return '=IFERROR(' + cr(c) + '/' + n + ',"")'; };
+  var money = '$#,##0;[Red]-$#,##0';
+  var stats = [  // [label, formula, number format, headline?]
+    ['Spreads traded', '=COUNT(' + rg(B.DATE) + ')', '0'],
+    ['Open', '=COUNTIF(' + st + ',"Open")', '0'],
+    ['Closed', '=COUNTIF(' + st + ',"Closed")', '0'],
+    ['Credit collected', '=SUMPRODUCT(' + rg(B.ENTRY) + ',' + rg(B.QTY) + ')*100', money],
+    ['Credit paid (to close)', '=SUMPRODUCT(' + rg(B.EXIT) + ',' + rg(B.QTY) + ')*100', money],
+    ['Commission', '=SUM(' + rg(B.COMM) + ')', '$#,##0.00'],
+    ['NET PREMIUM (collected - paid)', '=D3-E3', money, true],
+    ['REALISED P&L (closed + rolled, after commission)', '=' + cr(B.PNL), money, true],
+    ['Win rate', '=IFERROR((COUNTIFS(' + st + ',"Closed",' + rg(B.PNL) + ',">0")+COUNTIFS(' + st +
+                 ',"Rolled",' + rg(B.PNL) + ',">0"))/' + n + ',"")', '0%'],
+    ['Avg return on capital (closed + rolled)', avg(B.ROC), '0.00%'],
+    ['Rolled', '=COUNTIF(' + st + ',"Rolled")', '0'],
+    ['Capital at risk (open)', '=SUMIFS(' + rg(B.RISK) + ',' + st + ',"Open")', money],
+    ['Max profit still open', '=SUMPRODUCT(--(' + st + '="Open"),' + rg(B.ENTRY) + ',' + rg(B.QTY) + ')*100', money],
+    ['Avg days held (closed + rolled)', avg(B.DAYS), '0.0'],
+    ['Avg % of DTE used (closed + rolled)', avg(B.DTE_PCT), '0%']
+  ];
+  var k = stats.length;
+  // one consistent style from the old "Credit collected" cells, then the headline pair on top
+  sh.getRange(2, 4).copyTo(sh.getRange(2, 1, 1, k), { formatOnly: true });
+  sh.getRange(3, 4).copyTo(sh.getRange(3, 1, 1, k), { formatOnly: true });
+  sh.getRange(2, 1, 1, k).setValues([stats.map(function (x) { return x[0]; })]).setWrap(true);
+  sh.getRange(3, 1, 1, k).setFormulas([stats.map(function (x) { return x[1]; })])
+    .setNumberFormats([stats.map(function (x) { return x[2]; })]);
+  stats.forEach(function (x, j) { if (x[3]) ij_key_(sh.getRange(2, j + 1), sh.getRange(3, j + 1)); });
+  sh.setRowHeight(3, 40);
+}
+
+/** Wheel tab: find "Realised option P/L" (row 2) and "Net premium..." (row 4) and enlarge their values. */
+function ij_highlightWheel_(sh) {
+  [[2, /^Realised option P\/?L/i], [4, /^Net premium/i]].forEach(function (t) {
+    var h = sh.getRange(t[0], 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+    for (var c = 0; c < h.length; c++) {
+      if (t[1].test(h[c])) {
+        ij_key_(sh.getRange(t[0], c + 1), sh.getRange(t[0] + 1, c + 1));
+        sh.setRowHeight(t[0] + 1, 40);
+        return;
+      }
+    }
+  });
+}
+
+function ij_key_(label, value) {
+  label.setBackground(IJ.KEY_LABEL_BG).setFontWeight('bold').setFontSize(12);
+  value.setBackground(IJ.KEY_VALUE_BG).setFontWeight('bold').setFontSize(IJ.KEY_FONT)
+    .setVerticalAlignment('middle')
+    .setBorder(true, true, true, true, null, null, '#bf9000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+}
+
+/** 1 -> A, 27 -> AA */
+function ij_a1_(c) {
+  var s = '';
+  while (c > 0) { var m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = (c - m - 1) / 26; }
+  return s;
+}
+
 /* ------------------------------------------------------------ BPS breakeven */
 
 /**
- * AG Breakeven              short strike - net credit (Bear Call Spread: + credit)
- * AH Cushion @ open         breakeven vs Stock Price @ Open (G)
- * AI Live price             GOOGLEFINANCE, rows with a symbol only
- * AJ Live cushion           breakeven vs live price, Open rows only
- * Also widens the row-3 stats from $6:$15 to the whole log so rows 16+ count.
+ * Four columns after the last header (reused if already there):
+ *   Breakeven            short strike - net credit (Bear Call Spread: + credit)
+ *   Cushion @ open       breakeven vs Stock Price @ Open
+ *   Live price           GOOGLEFINANCE, rows with a symbol only
+ *   Live cushion         breakeven vs live price, Open rows only
  * Safe to re-run.
  */
 function ij_setupBreakeven() {
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName(IJ.BPS_TAB);
   if (!sh) throw new Error('Tab not found: ' + IJ.BPS_TAB);
-  var B = IJ.B, F = B.FIRST, max = sh.getMaxRows();
-  if (sh.getMaxColumns() < B.LAST_COL) sh.insertColumnsAfter(sh.getMaxColumns(), B.LAST_COL - sh.getMaxColumns());
+  var F = IJ.B.FIRST, max = sh.getMaxRows(), A = ij_a1_;
+  var B = ij_bpsNeed_(sh, ['STATUS', 'SYM', 'STRAT', 'PX_OPEN', 'SHORT', 'ENTRY']);
+  var hdr = sh.getRange(IJ.B.HDR, 1, 1, sh.getMaxColumns()).getDisplayValues()[0];
+  var be = hdr.indexOf('Breakeven (short strike - credit)') + 1 || B.LAST_COL + 1;
+  if (sh.getMaxColumns() < be + 3) sh.insertColumnsAfter(sh.getMaxColumns(), be + 3 - sh.getMaxColumns());
 
-  sh.getRange(B.HDR, B.BE, 1, 4).setValues([[
+  var col = function (c) { return '$' + A(c) + F + ':$' + A(c); };
+  var S = col(B.SHORT), E = col(B.ENTRY), BE = col(be), LP = col(be + 2);
+  sh.getRange(IJ.B.HDR, be, 1, 4).setValues([[
     'Breakeven (short strike - credit)', 'Cushion to breakeven @ open',
     'Live price', 'Live cushion to breakeven (open)']])
     .setFontWeight('bold').setWrap(true);
 
-  sh.getRange(F, B.BE, max - F + 1, 4).clearContent();
-  sh.getRange(F, B.BE).setFormula(
-    '=ARRAYFORMULA(IF(($I' + F + ':$I="")+($K' + F + ':$K=""),"",' +
-    'IF($E' + F + ':$E="Bear Call Spread",$I' + F + ':$I+$K' + F + ':$K,$I' + F + ':$I-$K' + F + ':$K)))');
-  sh.getRange(F, B.BE + 1).setFormula(
-    '=ARRAYFORMULA(IF(($AG' + F + ':$AG="")+(N($G' + F + ':$G)=0),"",$AG' + F + ':$AG/$G' + F + ':$G-1))');
+  sh.getRange(F, be, max - F + 1, 4).clearContent();
+  sh.getRange(F, be).setFormula(
+    '=ARRAYFORMULA(IF((' + S + '="")+(' + E + '=""),"",' +
+    'IF(' + col(B.STRAT) + '="Bear Call Spread",' + S + '+' + E + ',' + S + '-' + E + ')))');
+  sh.getRange(F, be + 1).setFormula(
+    '=ARRAYFORMULA(IF((' + BE + '="")+(N(' + col(B.PX_OPEN) + ')=0),"",' + BE + '/' + col(B.PX_OPEN) + '-1))');
   var live = [];
   for (var r = F; r <= Math.min(IJ.BPS_PREFILL, max); r++) {
-    live.push(['=IF($C' + r + '="","",IFERROR(GOOGLEFINANCE($C' + r + '),""))']);
+    live.push(['=IF($' + A(B.SYM) + r + '="","",IFERROR(GOOGLEFINANCE($' + A(B.SYM) + r + '),""))']);
   }
-  sh.getRange(F, B.BE + 2, live.length, 1).setFormulas(live);
-  sh.getRange(F, B.BE + 3).setFormula(
-    '=ARRAYFORMULA(IF(($B' + F + ':$B<>"Open")+($AG' + F + ':$AG="")+(N($AI' + F + ':$AI)=0),"",' +
-    '$AG' + F + ':$AG/$AI' + F + ':$AI-1))');
+  sh.getRange(F, be + 2, live.length, 1).setFormulas(live);
+  sh.getRange(F, be + 3).setFormula(
+    '=ARRAYFORMULA(IF((' + col(B.STATUS) + '<>"Open")+(' + BE + '="")+(N(' + LP + ')=0),"",' +
+    BE + '/' + LP + '-1))');
 
-  sh.getRange(F, B.BE, max - F + 1, 1).setNumberFormat('$#,##0.00');
-  sh.getRange(F, B.BE + 1, max - F + 1, 1).setNumberFormat('0.00%');
-  sh.getRange(F, B.BE + 2, max - F + 1, 1).setNumberFormat('$#,##0.00');
-  sh.getRange(F, B.BE + 3, max - F + 1, 1).setNumberFormat('0.00%');
+  sh.getRange(F, be, max - F + 1, 1).setNumberFormat('$#,##0.00');
+  sh.getRange(F, be + 1, max - F + 1, 1).setNumberFormat('0.00%');
+  sh.getRange(F, be + 2, max - F + 1, 1).setNumberFormat('$#,##0.00');
+  sh.getRange(F, be + 3, max - F + 1, 1).setNumberFormat('0.00%');
 
-  // row-3 stats only covered $6:$15
-  var stats = sh.getRange(3, 1, 1, 11);
-  var fx = stats.getFormulas()[0].map(function (f) {
-    return f.replace(/\$([A-Z]+)\$6:\$([A-Z]+)\$15\b/g, '$$$1$$6:$$$2$$' + max);
-  });
-  stats.setFormulas([fx]);
-
-  ss.toast('Breakeven columns added (AG:AJ); stats now cover rows 6-' + max, 'IBKR Journal', 8);
+  ss.toast('Breakeven columns added at ' + A(be) + ':' + A(be + 3), 'IBKR Journal', 8);
 }
 
 /* --------------------------------------------------------------------- import */
@@ -282,23 +429,26 @@ function ij_pushOne_(ss, row) {
   }
 
   if (t.action === 'NEW_BPS_ROW') {
-    var B = IJ.B;
-    var r3 = ij_freeRow_(sh, B.FIRST, sh.getMaxRows(), B.LAST_COL);
+    var B = ij_bpsNeed_(sh, ['DATE', 'STATUS', 'SYM', 'EXP', 'STRAT', 'QTY', 'SHORT', 'LONG',
+                             'ENTRY', 'COMM']);
+    var r3 = ij_freeRow_(sh, IJ.B.FIRST, sh.getMaxRows(), B.LAST_COL);
     ij_set_(sh, r3, B.DATE, date);  ij_set_(sh, r3, B.STATUS, t.status || 'Open');
     ij_set_(sh, r3, B.SYM, t.sym);  ij_set_(sh, r3, B.EXP, t.exp);
     ij_set_(sh, r3, B.STRAT, t.type || 'Bull Put Spread');
     ij_set_(sh, r3, B.QTY, t.qty);  ij_set_(sh, r3, B.SHORT, t.strike);
     ij_set_(sh, r3, B.LONG, t.longStrike); ij_set_(sh, r3, B.ENTRY, t.price);
-    ij_set_(sh, r3, B.NOTES2, IJ.AUTO_TAG);
+    ij_set_(sh, r3, B.COMM, t.comm);
+    if (B.NOTES) ij_set_(sh, r3, B.NOTES, IJ.AUTO_TAG);
     return 'Pushed -> ' + t.tab + ' row ' + r3;
   }
 
   if (t.action === 'CLOSE_BPS_ROW') {
-    var B2 = IJ.B;
-    var r4 = ij_findOpen_(sh, t, B2.FIRST, sh.getMaxRows(), B2.SYM, B2.STATUS, B2.SHORT, B2.EXP);
+    var B2 = ij_bpsNeed_(sh, ['STATUS', 'SYM', 'EXP', 'SHORT', 'EXIT_DATE', 'EXIT', 'COMM']);
+    var r4 = ij_findOpen_(sh, t, IJ.B.FIRST, sh.getMaxRows(), B2.SYM, B2.STATUS, B2.SHORT, B2.EXP);
     ij_set_(sh, r4, B2.EXIT_DATE, date);
     ij_set_(sh, r4, B2.EXIT, t.price);
     ij_set_(sh, r4, B2.STATUS, t.status || 'Closed');
+    ij_set_(sh, r4, B2.COMM, (Number(sh.getRange(r4, B2.COMM).getValue()) || 0) + t.comm);
     return 'Pushed -> closed ' + t.tab + ' row ' + r4;
   }
 
