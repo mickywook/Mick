@@ -43,10 +43,10 @@ def position(g, side):
 short_row, long_row = position(sg, -1), position(lg, 1)
 total_row = [a + b for a, b in zip(short_row, long_row)]
 fmt = ("{:+.2f}", "{:+,.0f}", "{:+,.0f}", "{:+.4f}", "{:+.2f}", "{:+.2f}", "{:+.2f}")
-row = lambda name, raw, vals: [name, raw] + [f.format(v) for f, v in zip(fmt, vals)]
-greek_rows = [row(f"Sell {KS:g} put", f"{sg[0]:+.4f}", short_row),
-              row(f"Buy {KL:g} put", f"{lg[0]:+.4f}", long_row),
-              row("Total", "", total_row)]
+row = lambda name, pos, raw, vals: [name, pos, raw] + [f.format(v) for f, v in zip(fmt, vals)]
+greek_rows = [row(f"Sell {KS:g} put", f"{-QTY:+g}", f"{sg[0]:+.4f}", short_row),
+              row(f"Buy {KL:g} put", f"{QTY:+g}", f"{lg[0]:+.4f}", long_row),
+              row("Total", "", "", total_row)]
 for r in greek_rows:
     print(" | ".join(r))
 for pct in (-15, -10, -5, 0, 5, 10):
@@ -87,7 +87,7 @@ ax.set_title(f"{tkr} {expiry} {KS:g}/{KL:g} Bull Put  |  {QTY:g} contract(s)  | 
              loc="left", fontsize=12, fontweight="bold", color=INK)
 tax.axis("off")
 tbl = tax.table(cellText=greek_rows,
-                colLabels=["Leg", "δ (option)", "Δ (position)", "Delta $", f"Beta Δ $ (β {BETA:g})",
+                colLabels=["Leg", "Position", "δ (option)", "Δ (position)", "Delta $", f"Beta Δ $ (β {BETA:g})",
                            "Gamma", "Theta $/day", "Vega $/vol pt", "Rho $/1%"],
                 loc="center", cellLoc="center")
 tbl.auto_set_font_size(False)
