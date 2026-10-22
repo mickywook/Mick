@@ -99,7 +99,7 @@ for (r, c), cell in tbl.get_celld().items():
     if r == 0 or r == len(greek_rows):
         cell.set_text_props(fontweight="bold", color=INK)
 tax.set_title("Greeks (δ = option per share; all other columns = position, x100, signed by side)", loc="left", fontsize=11, fontweight="bold", color=INK)
-fig.text(0.01, 0.01, f"Black-Scholes, leg IVs {IVS:.1%} / {IVL:.1%}, {R:.0%} rate, no dividend. Greeks: IBKR; vega & rho from model where IBKR does not show them.",
+fig.text(0.01, 0.01, f"Black-Scholes, leg IVs {IVS:.1%} / {IVL:.1%}, {R:.0%} rate, no dividend. Greeks: IBKR where available, otherwise model.",
          fontsize=8.5, color=INK2)
 fig.tight_layout(rect=(0, 0.03, 1, 1))
 fig.savefig(out, dpi=130, facecolor=SURF)
