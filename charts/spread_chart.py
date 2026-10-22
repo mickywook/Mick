@@ -1,6 +1,8 @@
 """Bull put spread P&L chart (at expiry and today) plus model rho per leg.
 
-Usage: python3 spread_chart.py OUT.png TICKER EXPIRY STOCK DTE SHORT_K SHORT_IV LONG_K LONG_IV CREDIT QTY
+Usage: python3 spread_chart.py OUT.png TICKER EXPIRY STOCK DTE SHORT_K SHORT_IV LONG_K LONG_IV CREDIT QTY \
+       SHORT_DELTA SHORT_GAMMA SHORT_THETA SHORT_VEGA LONG_DELTA LONG_GAMMA LONG_THETA LONG_VEGA
+Leg greeks are IBKR per-share values for one long option; rho comes from the model.
 """
 import math, sys
 import numpy as np
@@ -29,7 +31,17 @@ def pnl(S, T):
     return (put(S, KL, T, IVL)[0] - put(S, KS, T, IVS)[0] + CREDIT) * M
 
 rs, rl = put(S0, KS, T0, IVS)[1], put(S0, KL, T0, IVL)[1]
-print(f"rho short {-rs * M:+.2f}  long {rl * M:+.2f}  total {(rl - rs) * M:+.2f}")
+sg = [float(x) for x in sys.argv[12:16]] + [rs]
+lg = [float(x) for x in sys.argv[16:20]] + [rl]
+short_row = [-v * M for v in sg]
+long_row = [v * M for v in lg]
+total_row = [a + b for a, b in zip(short_row, long_row)]
+fmt = ("{:+.2f}", "{:+.4f}", "{:+.2f}", "{:+.2f}", "{:+.2f}")
+greek_rows = [[f"Sell {KS:g} put"] + [f.format(v) for f, v in zip(fmt, short_row)],
+              [f"Buy {KL:g} put"] + [f.format(v) for f, v in zip(fmt, long_row)],
+              ["Total"] + [f.format(v) for f, v in zip(fmt, total_row)]]
+for r in greek_rows:
+    print(" | ".join(r))
 for pct in (-15, -10, -5, 0, 5, 10):
     S = S0 * (1 + pct / 100)
     print(f"{pct:+d}% {S:.2f} today {pnl(S, T0):+.0f} expiry {pnl(S, 0):+.0f}")
@@ -40,7 +52,8 @@ xs = np.linspace(KL - 0.06 * S0, S0 * 1.08, 401)
 BE, alert = KS - CREDIT, (S0 + KS) / 2
 gain, loss = CREDIT * M, (width - CREDIT) * M
 
-fig, ax = plt.subplots(figsize=(11, 6), facecolor=SURF)
+fig, (ax, tax) = plt.subplots(2, 1, figsize=(11, 8), facecolor=SURF,
+                             gridspec_kw={"height_ratios": [4, 1.1]})
 ax.set_facecolor(SURF)
 for s in ("top", "right"):
     ax.spines[s].set_visible(False)
@@ -65,7 +78,20 @@ ax.tick_params(colors=INK2)
 ax.legend(loc="lower right", frameon=False)
 ax.set_title(f"{tkr} {expiry} {KS:g}/{KL:g} Bull Put  |  {QTY:g} contract(s)  |  credit \\${CREDIT:.2f}  |  {DTE:g} DTE",
              loc="left", fontsize=12, fontweight="bold", color=INK)
-fig.text(0.01, 0.01, f"Black-Scholes, leg IVs {IVS:.1%} / {IVL:.1%}, {R:.0%} rate, no dividend.",
+tax.axis("off")
+tbl = tax.table(cellText=greek_rows,
+                colLabels=["Leg", "Delta", "Gamma", "Theta $/day", "Vega $/vol pt", "Rho $/1%"],
+                loc="center", cellLoc="center")
+tbl.auto_set_font_size(False)
+tbl.set_fontsize(10)
+tbl.scale(1, 1.6)
+for (r, c), cell in tbl.get_celld().items():
+    cell.set_edgecolor(GRID)
+    cell.set_facecolor(SURF)
+    if r == 0 or r == len(greek_rows):
+        cell.set_text_props(fontweight="bold", color=INK)
+tax.set_title("Greeks (whole position, x100)", loc="left", fontsize=11, fontweight="bold", color=INK)
+fig.text(0.01, 0.01, f"Black-Scholes, leg IVs {IVS:.1%} / {IVL:.1%}, {R:.0%} rate, no dividend. Greeks: IBKR live; rho from model.",
          fontsize=8.5, color=INK2)
 fig.tight_layout(rect=(0, 0.03, 1, 1))
 fig.savefig(out, dpi=130, facecolor=SURF)
