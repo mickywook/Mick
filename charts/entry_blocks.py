@@ -83,12 +83,8 @@ for (tkr, opened, exp, S, KS, PS, KL, PL, Q, KA, CA, PA, beta, hv, ivpct) in TRA
     print()
     print("Volatility (at entry)")
     print(f"IV {KS:g} put (short strike):   {ivs:.1%}")
-    print(f"IV {KL:g} put (long strike):    {ivl:.1%}")
-    print(f"IV at-the-money ({KA:g}):       {atm:.1%}")
     print(f"Historical volatility (30d): {hv:.1f}%")
-    print(f"IV / HV (ATM):               {atm * 100 / hv:.2f}")
     print(f"IV percentile (52w):         {ivpct}%  (today's value; IBKR has no history)")
-    print("IV rank (52w):               n/a  (not available from IBKR)")
     print(f"[ATM IV {atm:.1%}; leg IVs {ivs:.1%} / {ivl:.1%}; short-put delta {gs['delta']:.3f}]")
     print("CHART:", " ".join(str(x) for x in (
         f"{tkr}_{KS:g}_{KL:g}_bull_put.png", tkr, f"\"{exp.strftime('%b %d')} '26 (at open {opened} UTC)\"",
