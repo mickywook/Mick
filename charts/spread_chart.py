@@ -77,7 +77,10 @@ ax.axhline(0, color=INK2, linewidth=0.8)
 ax.plot(xs, [pnl(S, 0) for S in xs], color=BLUE, linewidth=2, label="At expiry")
 ax.plot(xs, [pnl(S, T0) for S in xs], color=ORANGE, linewidth=2, label="Today (T+0)")
 ax.axvline(S0, color=INK2, linewidth=1, linestyle="--")
-for x, lbl in ((BE, f"B/E {BE:.2f}"), (alert, f"50% alert {alert:.2f}"), (S0, f"{tkr} {S0:.2f}")):
+marks = [(BE, f"B/E {BE:.2f}"), (S0, f"{tkr} {S0:.2f}")]
+if not CALL:  # no 50% alert on bear calls
+    marks.insert(1, (alert, f"50% alert {alert:.2f}"))
+for x, lbl in marks:
     ax.axvline(x, color=GRID if x != S0 else INK2, linewidth=1.2, linestyle="-" if x != S0 else "--")
     ax.annotate(lbl, (x, -loss / 2), rotation=90, fontsize=9, color=INK2,
                 xytext=(3, 0), textcoords="offset points", va="center")
