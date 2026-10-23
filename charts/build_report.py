@@ -1,5 +1,5 @@
 """Build one HTML page: each spread's payoff chart followed by its calculator block."""
-import base64, html, re, shlex, subprocess, sys
+import base64, html, shlex, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -23,21 +23,8 @@ parts = []
 for tkr in ORDER:
     block, args = sections[tkr]
     png = HERE / args[0]
-    printed = subprocess.run([sys.executable, HERE / "spread_chart.py", str(png)] + args[1:],
-                             capture_output=True, text=True).stdout.splitlines()
-    beta = args[-1]
-    greeks = [f"Greeks at open (β {beta})",
-              f"{'Leg':<14} {'Pos':>4} {'δ':>8} {'Δ':>7} {'Delta $':>9} {'Beta Δ $':>9} {'Gamma':>8} {'Theta':>7} {'Vega':>8} {'Rho':>7}"]
-    for l in printed[:3]:
-        c = [x.strip() for x in l.split("|")]
-        greeks.append(f"{c[0]:<14} {c[1]:>4} {c[2]:>8} {c[3]:>7} {c[4]:>9} {c[5]:>9} {c[6]:>8} {c[7]:>7} {c[8]:>8} {c[9]:>7}")
-    scen = ["Move   Price      At open   At expiry"]
-    for l in printed[3:9]:
-        m = re.match(r"([+-]\d+)% ([\d.]+) today ([+-]?\d+) expiry ([+-]?\d+)", l)
-        pct, px, now, exp = m.groups()
-        f = lambda v: f"{'-' if int(v) < 0 else '+'}${abs(int(v)):,}" if int(v) else "$0"
-        scen.append(f"{pct + '%':>5}  {float(px):>8.2f}   {f(now):>8}   {f(exp):>8}")
-    text = "\n".join(block + [""] + greeks + [""] + scen)
+    subprocess.run([sys.executable, HERE / "spread_chart.py", str(png)] + args[1:], capture_output=True, check=True)
+    text = "\n".join(block)
     img = base64.b64encode(png.read_bytes()).decode()
     parts.append(f'<section><h2>{tkr}</h2><img src="data:image/png;base64,{img}" alt="{tkr} payoff diagram">'
                  f"<pre>{html.escape(text)}</pre></section>")
@@ -54,7 +41,7 @@ img {{ width:100%; height:auto; border-radius:6px; background:#fcfcfb; }}
 pre {{ background:var(--code); padding:12px; border-radius:6px; overflow-x:auto; font-size:13px; margin:12px 0 0; }}
 </style></head><body>
 <h1>Open bull put spreads, as at entry</h1>
-<p>Each payoff diagram is followed by its calculation. Values use your fill prices and IBKR bars at the fill time.</p>
+<p>Each payoff diagram (with greeks at open) is followed by its calculation. Values use your fill prices and IBKR bars at the fill time.</p>
 {''.join(parts)}
 </body></html>"""
 (HERE / "bull_put_spreads.html").write_text(page)

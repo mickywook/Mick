@@ -11,15 +11,15 @@ n = lambda x: math.exp(-x * x / 2) / math.sqrt(2 * math.pi)
 R = 0.04
 
 # ticker, opened (UTC), expiry, stock at fill, short K, short fill, long K, long fill, qty,
-# ATM strike, ATM call, ATM put, beta
+# ATM strike, ATM call, ATM put, beta, 30d HV at entry (%), IV percentile 52w (%, today)
 TRADES = [
-    ("SPY", "2026-10-07 13:55", date(2026, 11, 20), 774.95, 735, 4.23, 730, 3.76, 2, 775, 16.60, 12.95, 1.00),
-    ("AAPL", "2026-10-07 17:13", date(2026, 11, 20), 336.05, 305, 2.52, 300, 1.96, 2, 335, 13.25, 10.70, 1.09),
-    ("AMZN", "2026-10-08 13:39", date(2026, 11, 20), 259.40, 230, 3.03, 225, 2.31, 1, 260, 13.65, 13.10, 1.46),
-    ("MSFT", "2026-10-12 17:57", date(2026, 10, 30), 540.05, 505, 4.35, 500, 3.55, 1, 540, 17.28, 15.50, 1.13),
-    ("MRK", "2026-10-16 18:02", date(2026, 11, 20), 146.70, 135, 2.23, 130, 1.33, 1, 145, 7.40, 5.50, 0.28),
-    ("PLTR", "2026-10-19 17:39", date(2026, 11, 20), 195.50, 165, 3.725, 160, 2.925, 2, 195, 14.90, 13.74, 1.57),
-    ("DIS", "2026-10-20 19:11", date(2026, 11, 20), 111.30, 100, 0.86, 95, 0.36, 2, 110, 5.25, 3.50, 1.10),
+    ("SPY", "2026-10-07 13:55", date(2026, 11, 20), 774.95, 735, 4.23, 730, 3.76, 2, 775, 16.60, 12.95, 1.00, 9.9, 65),
+    ("AAPL", "2026-10-07 17:13", date(2026, 11, 20), 336.05, 305, 2.52, 300, 1.96, 2, 335, 13.25, 10.70, 1.09, 21.1, 73),
+    ("AMZN", "2026-10-08 13:39", date(2026, 11, 20), 259.40, 230, 3.03, 225, 2.31, 1, 260, 13.65, 13.10, 1.46, 24.7, 90),
+    ("MSFT", "2026-10-12 17:57", date(2026, 10, 30), 540.05, 505, 4.35, 500, 3.55, 1, 540, 17.28, 15.50, 1.13, 22.5, 78),
+    ("MRK", "2026-10-16 18:02", date(2026, 11, 20), 146.70, 135, 2.23, 130, 1.33, 1, 145, 7.40, 5.50, 0.28, 24.7, 95),
+    ("PLTR", "2026-10-19 17:39", date(2026, 11, 20), 195.50, 165, 3.725, 160, 2.925, 2, 195, 14.90, 13.74, 1.57, 39.8, 91),
+    ("DIS", "2026-10-20 19:11", date(2026, 11, 20), 111.30, 100, 0.86, 95, 0.36, 2, 110, 5.25, 3.50, 1.10, 21.6, 71),
 ]
 
 
@@ -47,7 +47,7 @@ def pnl(S, T, KS, IVS, KL, IVL, credit, M):
     return (leg(KL, IVL) - leg(KS, IVS) + credit) * M
 
 
-for (tkr, opened, exp, S, KS, PS, KL, PL, Q, KA, CA, PA, beta) in TRADES:
+for (tkr, opened, exp, S, KS, PS, KL, PL, Q, KA, CA, PA, beta, hv, ivpct) in TRADES:
     d0 = date.fromisoformat(opened[:10])
     dte = (exp - d0).days
     T = dte / 365
@@ -83,6 +83,15 @@ for (tkr, opened, exp, S, KS, PS, KL, PL, Q, KA, CA, PA, beta) in TRADES:
     print(f"Expected move straddle:     ±${strad:.2f} (±{strad / S:.2%})  Top ${S + strad:.2f}  Bottom ${S - strad:.2f}")
     print(f"50% alert:          ${alert:.2f}  ({alert / S - 1:.2%})")
     print(f"Stop loss (2x premium): close at ${3 * credit:.2f} debit  (loss ${2 * credit * M:,.0f})")
+    print()
+    print("Volatility (at entry)")
+    print(f"IV {KS:g} put (short strike):   {ivs:.1%}")
+    print(f"IV {KL:g} put (long strike):    {ivl:.1%}")
+    print(f"IV at-the-money ({KA:g}):       {atm:.1%}")
+    print(f"Historical volatility (30d): {hv:.1f}%")
+    print(f"IV / HV (ATM):               {atm * 100 / hv:.2f}")
+    print(f"IV percentile (52w):         {ivpct}%  (today's value; IBKR has no history)")
+    print("IV rank (52w):               n/a  (not available from IBKR)")
     print(f"[ATM IV {atm:.1%}; leg IVs {ivs:.1%} / {ivl:.1%}; short-put delta {gs['delta']:.3f}]")
     print("CHART:", " ".join(str(x) for x in (
         f"{tkr}_{KS:g}_{KL:g}_bull_put.png", tkr, f"\"{exp.strftime('%b %d')} '26 (at open {opened} UTC)\"",
