@@ -77,7 +77,7 @@ for (r, c), cell in tbl.get_celld().items():
         cell.set_text_props(fontweight="bold", color=INK)
 tax.set_title("Greeks (δ = option per share; all other columns = position, x100, signed by side)",
               loc="left", fontsize=11, fontweight="bold", color=INK)
-fig.text(0.01, 0.01, f"Black-Scholes, strike IV {IV:.1%}, {R:.0%} rate, no dividend. Greeks: IBKR; rho from model.",
+fig.text(0.01, 0.01, f"Black-Scholes, strike IV {IV:.1%}, {R:.0%} rate, no dividend. Greeks: IBKR live, or model at the fill; rho from model.",
          fontsize=8.5, color=INK2)
 fig.tight_layout(rect=(0, 0.03, 1, 1))
 fig.savefig(out, dpi=130, facecolor=SURF)
