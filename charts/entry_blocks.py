@@ -59,7 +59,6 @@ for (tkr, opened, exp, S, KS, PS, KL, PL, Q, KA, CA, PA, beta, hv, ivpct) in TRA
     ret = credit / (width - credit)
     ivs, ivl = iv(S, KS, T, PS, False), iv(S, KL, T, PL, False)
     atm = (iv(S, KA, T, CA, True) + iv(S, KA, T, PA, False)) / 2
-    sd = S * atm * math.sqrt(T)
     strad = CA + PA
     alert = (S + KS) / 2
     gs, gl = bs(S, KS, T, ivs, False), bs(S, KL, T, ivl, False)
