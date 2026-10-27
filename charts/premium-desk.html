@@ -1,0 +1,685 @@
+<title>Premium Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a broker-terminal working surface — inputs on the left, the payoff drawing and copyable calc on the right; journal is a stack of trade rows that expand. */
+:root {
+  --bg: #f4f5f2; --panel: #ffffff; --ink: #14181f; --muted: #5d6470; --line: #dde0dc;
+  --accent: #1f5fbf; --today: #d9622b; --good: #1d7a4b; --warn: #b7791f; --bad: #c0392b;
+  --code: #eef0ec; --chip: #e7ebf2;
+  --f-display: "Archivo Narrow", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1216; --panel: #161b21; --ink: #e8ebef; --muted: #9aa3ae; --line: #2a313a;
+  --accent: #5b9bf0; --today: #f08a52; --good: #45b97c; --warn: #e0a84a; --bad: #ec6b5e;
+  --code: #1c2229; --chip: #222b36; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #161b21; --ink: #e8ebef; --muted: #9aa3ae; --line: #2a313a;
+  --accent: #5b9bf0; --today: #f08a52; --good: #45b97c; --warn: #e0a84a; --bad: #ec6b5e;
+  --code: #1c2229; --chip: #222b36; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 40px }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; border-bottom: 2px solid var(--ink); padding-bottom: 8px }
+h1 { font: 700 26px/1.1 var(--f-display); letter-spacing: .01em; margin: 0; text-transform: uppercase }
+h1 small { font: 500 13px var(--f-body); color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 8px }
+nav { display: flex; gap: 4px }
+nav button { font: 600 13px var(--f-body); letter-spacing: .06em; text-transform: uppercase; background: none; border: 1px solid var(--line); color: var(--muted); padding: 6px 14px; border-radius: 4px; cursor: pointer }
+nav button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink) }
+.conn { font-size: 12px; color: var(--muted) }
+.conn b { font-weight: 600 }
+.grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; min-width: 0 }
+.panel h2 { font: 600 15px var(--f-display); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 10px; color: var(--muted) }
+label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0 }
+input, select { font: 500 14px var(--f-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; min-width: 0 }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 8px }
+.legs { display: grid; gap: 6px; margin-bottom: 8px }
+.leg { display: grid; grid-template-columns: 74px 1fr 1fr; gap: 6px; align-items: end }
+.leg .tag { font: 600 12px var(--f-mono); padding: 7px 0; text-align: center; border-radius: 4px; background: var(--chip) }
+.leg .tag.s { color: var(--bad) } .leg .tag.l { color: var(--accent) }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 }
+button.b { font: 600 13px var(--f-body); border: 1px solid var(--ink); background: var(--ink); color: var(--bg); padding: 7px 12px; border-radius: 4px; cursor: pointer }
+button.b.ghost { background: transparent; color: var(--ink); border-color: var(--line) }
+button.b:disabled { opacity: .5; cursor: default }
+details { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px }
+summary { cursor: pointer; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase }
+.note { font-size: 12px; color: var(--muted); margin: 6px 0 0 }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--chip); margin: 8px 0 0 }
+.msg.err { color: var(--bad) } .msg.ok { color: var(--good) }
+.chart { width: 100%; height: auto; display: block; touch-action: pan-y }
+.chart text { font: 11px var(--f-mono); fill: var(--muted) }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin: 4px 0 8px }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px }
+.tip { font: 12px var(--f-mono); color: var(--muted); min-height: 18px }
+.tbl { overflow-x: auto; margin-top: 8px }
+table { border-collapse: collapse; width: 100%; font: 12px var(--f-mono); font-variant-numeric: tabular-nums }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .05em; color: var(--muted) }
+th:first-child, td:first-child { text-align: left }
+tr.tot td { font-weight: 600; border-bottom: 0 }
+pre.calc { background: var(--code); border-radius: 4px; padding: 12px; overflow-x: auto; font: 12.5px/1.55 var(--f-mono); margin: 8px 0 0; white-space: pre }
+.calchead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px }
+.calchead h3, .sub { font: 600 13px var(--f-display); text-transform: uppercase; letter-spacing: .08em; margin: 0; color: var(--muted) }
+.trades { display: grid; gap: 8px }
+.trade { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 0 }
+.trade > button.head { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)) auto; gap: 10px; align-items: center; padding: 10px 14px }
+.trade > button.head:focus-visible { outline: 2px solid var(--accent) }
+.trade .tk { font: 700 18px var(--f-display); letter-spacing: .02em }
+.trade .tk span { font: 500 12px var(--f-body); color: var(--muted); margin-left: 6px }
+.kv { display: grid; font-size: 11px; color: var(--muted) }
+.kv b { font: 500 14px var(--f-mono); color: var(--ink) }
+.pos { color: var(--good) !important } .neg { color: var(--bad) !important }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end }
+.chip { font: 600 11px var(--f-body); padding: 2px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); white-space: nowrap }
+.chip.g { color: var(--good) } .chip.w { color: var(--warn) } .chip.r { color: var(--bad) }
+.body { border-top: 1px solid var(--line); padding: 12px 14px; display: grid; gap: 10px }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px }
+@media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr) } .trade > button.head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) } .trade .chips { grid-column: 1 / -1; justify-content: flex-start } }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted) }
+.empty b { display: block; font: 700 18px var(--f-display); color: var(--ink); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px }
+.cands { display: grid; gap: 4px; margin: 10px 0 }
+.cand { display: flex; gap: 8px; align-items: center; font: 13px var(--f-mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px }
+.cand input { width: auto }
+.inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px }
+@media (prefers-reduced-motion: no-preference) { .trade .body { animation: fade .18s ease-out } @keyframes fade { from { opacity: .4 } to { opacity: 1 } } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Premium Desk <small>bull puts · bear calls · CSPs · covered calls</small></h1>
+    <nav role="tablist">
+      <button id="tab-calc" role="tab" aria-selected="true">Calculator</button>
+      <button id="tab-journal" role="tab" aria-selected="false">Journal</button>
+    </nav>
+    <div class="conn" id="conn">IBKR: <b>checking…</b></div>
+  </header>
+
+  <!-- CALCULATOR -->
+  <section id="view-calc" class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <h2>Trade</h2>
+      <div class="row">
+        <label>Strategy
+          <select id="kind">
+            <option value="bull_put">Bull put spread</option>
+            <option value="bear_call">Bear call spread</option>
+            <option value="csp">Cash-secured put</option>
+            <option value="covered_call">Covered call</option>
+          </select></label>
+        <label>Ticker <input id="ticker" value="PLTR"></label>
+      </div>
+      <div class="row">
+        <label>Expiry <input id="expiry" type="date" value="2026-11-20"></label>
+        <label>Contracts <input id="qty" type="number" min="1" step="1" value="2"></label>
+        <label>Stock price <input id="S" type="number" step="0.01" value="195.50"></label>
+      </div>
+      <div class="legs" id="legs"></div>
+      <div class="row" id="stockrow" hidden>
+        <label>Stock cost basis <input id="basis" type="number" step="0.01"></label>
+      </div>
+      <div class="btns">
+        <button type="button" class="b" id="live">Get live data</button>
+        <label class="b ghost" style="display:inline-flex;align-items:center;cursor:pointer" id="shotlbl">Read screenshot
+          <input type="file" id="shot" accept="image/png,image/jpeg,image/webp" hidden></label>
+      </div>
+      <div class="msg" id="formmsg" hidden></div>
+      <details open>
+        <summary>Volatility & context</summary>
+        <div class="row" style="margin-top:8px">
+          <label>HV 30d % <input id="hv" type="number" step="0.1" value="39.8"></label>
+          <label>IV pct 52w % <input id="ivpct" type="number" step="1" value="91"></label>
+          <label>Straddle $ <input id="straddle" type="number" step="0.01" value="28.64"></label>
+        </div>
+        <div class="row">
+          <label>Beta <input id="beta" type="number" step="0.01" value="1.57"></label>
+          <label>Earnings <input id="earn" type="date" value="2026-11-02"></label>
+          <label>Opened <input id="opened" type="date" value="2026-10-19"></label>
+        </div>
+      </details>
+      <details>
+        <summary>Roll (carry an earlier credit)</summary>
+        <div class="row" style="margin-top:8px">
+          <label>Earlier credit $/sh <input id="r_orig" type="number" step="0.01" placeholder="0.90"></label>
+          <label>Close cost $/sh <input id="r_close" type="number" step="0.01" placeholder="1.28"></label>
+          <label>Earlier contracts <input id="r_qty" type="number" step="1" placeholder="1"></label>
+        </div>
+        <p class="note">The new legs below are the roll-to legs. The drawing and calc then show the whole campaign: earlier credit, minus the cost to close, plus the new credit.</p>
+      </details>
+      <p class="note" id="example">Example loaded: your PLTR 165/160 bull put at entry. Replace with any trade.</p>
+    </form>
+
+    <div class="panel" id="out">
+      <h2 id="outtitle">Profit &amp; loss</h2>
+      <div class="legend"><span><i style="background:var(--accent)"></i>At expiry</span><span><i style="background:var(--today)"></i>Today (T+0)</span><span id="lg-marker" hidden><i style="background:var(--ink);height:8px;width:8px;border-radius:50%"></i>Now</span></div>
+      <svg class="chart" id="chart" viewBox="0 0 820 380" role="img" aria-label="Profit and loss diagram"></svg>
+      <div class="tip" id="tip">Hover the drawing to read P&amp;L at any price.</div>
+      <div class="tbl"><table id="greeks"></table></div>
+      <div class="calchead"><h3>Calculation</h3><button type="button" class="b ghost" id="copy">Copy</button></div>
+      <pre class="calc" id="calc"></pre>
+    </div>
+  </section>
+
+  <!-- JOURNAL -->
+  <section id="view-journal" hidden>
+    <div class="panel">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
+        <h2 style="margin:0">Open trades</h2>
+        <div class="btns" style="margin:0">
+          <button class="b" id="import">Import from IBKR</button>
+          <button class="b ghost" id="refresh">Refresh prices</button>
+        </div>
+      </div>
+      <div class="msg" id="jmsg" hidden></div>
+      <div id="cands" hidden></div>
+    </div>
+    <div class="trades" id="trades" style="margin-top:12px">
+      <div class="panel empty" id="jempty"><b>No trades yet</b>Click <em>Import from IBKR</em>. It finds your open bull puts, bear calls, CSPs and covered calls, works out each one's entry from your fill, and tracks it here.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+/* ---------- maths ---------- */
+const R = 0.04;
+const SERVER = "Interactive Brokers IBKR";
+function erf(x) { const s = Math.sign(x); x = Math.abs(x); const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y; }
+const Ncdf = x => 0.5 * (1 + erf(x / Math.SQRT2));
+const npdf = x => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+function bs(right, S, K, T, s) {
+  if (T <= 0 || s <= 0) { const p = right === "C" ? Math.max(S - K, 0) : Math.max(K - S, 0);
+    return { price: p, delta: right === "C" ? (S > K ? 1 : 0) : (S < K ? -1 : 0), gamma: 0, theta: 0, vega: 0, rho: 0 }; }
+  const sq = Math.sqrt(T), d1 = (Math.log(S / K) + (R + s * s / 2) * T) / (s * sq), d2 = d1 - s * sq, df = Math.exp(-R * T);
+  const gamma = npdf(d1) / (S * s * sq), vega = S * npdf(d1) * sq / 100;
+  if (right === "C") return { price: S * Ncdf(d1) - K * df * Ncdf(d2), delta: Ncdf(d1), gamma, vega,
+    theta: (-S * npdf(d1) * s / (2 * sq) - R * K * df * Ncdf(d2)) / 365, rho: K * T * df * Ncdf(d2) / 100 };
+  return { price: K * df * Ncdf(-d2) - S * Ncdf(-d1), delta: Ncdf(d1) - 1, gamma, vega,
+    theta: (-S * npdf(d1) * s / (2 * sq) + R * K * df * Ncdf(-d2)) / 365, rho: -K * T * df * Ncdf(-d2) / 100 };
+}
+function solveIV(right, S, K, T, price) {
+  if (!(price > 0) || !(T > 0)) return null;
+  const intrinsic = right === "C" ? Math.max(S - K * Math.exp(-R * T), 0) : Math.max(K * Math.exp(-R * T) - S, 0);
+  if (price <= intrinsic + 1e-4) return null;
+  let lo = 0.005, hi = 5;
+  for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2; if (bs(right, S, K, T, m).price > price) hi = m; else lo = m; }
+  return (lo + hi) / 2;
+}
+const DAY = 86400000;
+const parseD = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const todayD = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
+const daysBetween = (a, b) => Math.round((b - a) / DAY);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtD = d => `${String(d.getDate()).padStart(2, "0")}-${MON[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`;
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const money = v => (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+const money2 = v => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+const pct = (v, d = 2) => (v >= 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
+const sgn = (v, d = 2) => (v >= 0 ? "+" : "") + v.toFixed(d);
+const g = (v) => Number.isFinite(v) ? v : null;
+const NAMES = { bull_put: "Bull Put Spread", bear_call: "Bear Call Spread", csp: "Cash-Secured Put", covered_call: "Covered Call" };
+
+/* ---------- position engine ---------- */
+// trade: {kind,ticker,expiry,qty,legs:[{right,strike,n,price,iv}],stock:{shares,basis}|null,adj,S,opened,hv,ivpct,straddle,beta,earnings}
+function pnlAt(t, S, Tyrs, ivs) {
+  let v = t.adj || 0;
+  t.legs.forEach((l, i) => { const iv = (ivs && ivs[i]) || l.iv || 0.3; v += l.n * 100 * (bs(l.right, S, l.strike, Tyrs, iv).price - l.price); });
+  if (t.stock) v += t.stock.shares * (S - t.stock.basis);
+  return v;
+}
+function stats(t) {
+  const Ks = t.legs.map(l => l.strike).concat(t.stock ? [t.stock.basis] : []);
+  const hiS = Math.max(...Ks, t.S) * 3, n = 3000; let maxG = -Infinity, maxL = Infinity; const pts = [];
+  for (let i = 0; i <= n; i++) { const S = hiS * i / n, v = pnlAt(t, S, 0); pts.push([S, v]); if (v > maxG) maxG = v; if (v < maxL) maxL = v; }
+  const bes = [];
+  for (let i = 1; i < pts.length; i++) { const [s0, v0] = pts[i - 1], [s1, v1] = pts[i]; if ((v0 < 0 && v1 >= 0) || (v0 >= 0 && v1 < 0)) bes.push(s0 + (s1 - s0) * (-v0) / (v1 - v0)); }
+  const credit = -t.legs.reduce((a, l) => a + l.n * 100 * l.price, 0) + (t.adj || 0);
+  const short = t.legs.find(l => l.n < 0), long = t.legs.find(l => l.n > 0);
+  const be = t.kind === "bear_call" ? bes.find(b => b > t.S) ?? bes[0] : [...bes].reverse().find(b => b < t.S) ?? bes[0];
+  return { maxG, maxL, be, credit, perUnit: credit / (t.qty * 100), short, long };
+}
+function greeksRows(t, S, Tyrs, ivs) {
+  const rows = t.legs.map((l, i) => { const iv = (ivs && ivs[i]) || l.iv || 0.3, k = bs(l.right, S, l.strike, Tyrs, iv), m = l.n * 100;
+    return { name: `${l.n < 0 ? "Sell" : "Buy"} ${l.strike} ${l.right === "P" ? "put" : "call"}`, pos: l.n, d: k.delta, D: k.delta * m, gm: k.gamma * m, th: k.theta * m, vg: k.vega * m, rh: k.rho * m }; });
+  if (t.stock) rows.push({ name: `Stock ${t.stock.shares} sh`, pos: t.stock.shares, d: 1, D: t.stock.shares, gm: 0, th: 0, vg: 0, rh: 0 });
+  const tot = rows.reduce((a, r) => ({ D: a.D + r.D, gm: a.gm + r.gm, th: a.th + r.th, vg: a.vg + r.vg, rh: a.rh + r.rh }), { D: 0, gm: 0, th: 0, vg: 0, rh: 0 });
+  return { rows, tot };
+}
+
+/* ---------- calc block (same rules as the chat) ---------- */
+function calcText(t, o = {}) {
+  const st = stats(t), exp = parseD(t.expiry), open = t.opened ? parseD(t.opened) : todayD();
+  const dte = Math.max(daysBetween(open, exp), 0), campaign = o.campaignDays || dte;
+  const q = t.qty, L = [], P = (k, v) => L.push((k + ":").padEnd(20) + v);
+  const sh = st.short, lg = st.long, kind = t.kind, S = t.S;
+  const strikes = kind === "csp" || kind === "covered_call" ? `${sh.strike} strike` : `${sh.strike}/${lg.strike}`;
+  L.push(`${t.ticker} ${NAMES[kind]} | ${strikes} | Exp ${fmtD(exp)} (${dte} DTE${t.opened ? " at open" : ""}) | ${q} contract${q > 1 ? "s" : ""}`);
+  if (t.opened) P("Opened", fmtD(open) + (t.openedTime ? " " + t.openedTime : ""));
+  P("Stock price", `$${S.toFixed(2)}  (${o.live ? "live" : "at fill"})`);
+  if (t.adj) P("Carried credit", money(t.adj) + "  (earlier credit minus close cost)");
+  P("Net credit", `$${st.perUnit.toFixed(2)} per ${kind === "csp" || kind === "covered_call" ? "share" : "spread"}  (${money(st.credit)} total)`);
+  if (kind === "csp") P("Cash secured", money(sh.strike * 100 * q) + `  (${sh.strike} x 100${q > 1 ? " x " + q : ""})`);
+  if (kind === "covered_call") P("Stock cost basis", `$${t.stock.basis.toFixed(2)}  (${t.stock.shares} sh)`);
+  const maxL = -st.maxL, maxG = st.maxG;
+  P("Max gain", money(maxG));
+  P("Max loss", money(maxL) + (kind === "csp" || kind === "covered_call" ? "  (stock to zero)" : ""));
+  if (kind !== "covered_call") { P("Risk to reward", `${(maxL / maxG).toFixed(2)} : 1`); L.push("Win rate needed to break even: " + Math.round(maxL / (maxL + maxG) * 100) + "%"); }
+  P("Breakeven", `$${st.be.toFixed(2)}`);
+  const ret = maxG / maxL;
+  if (kind === "covered_call") { P("Premium yield", ((st.perUnit - (t.adj || 0) / (q * 100)) / S * 100).toFixed(2) + "%"); P("Return if called", (ret * 100).toFixed(2) + "%"); }
+  else P("% return on risk", (ret * 100).toFixed(2) + "%");
+  L.push("% return annualized: " + (ret * 365 / Math.max(campaign, 1) * 100).toFixed(2) + `%  (simple, 365/${campaign})`);
+  if (kind === "bear_call") { P("Rise to B/E", pct(st.be / S - 1)); L.push("Rise to short strike: " + pct(sh.strike / S - 1)); }
+  else if (kind === "covered_call") { L.push("Rise to short strike: " + pct(sh.strike / S - 1)); }
+  else { if (kind !== "csp") P("Decline to B/E", pct(st.be / S - 1)); L.push("Decline to short strike: " + pct(sh.strike / S - 1)); }
+  if (t.straddle > 0) L.push(`Expected move (straddle):   ±$${t.straddle.toFixed(2)} (±${(t.straddle / S * 100).toFixed(2)}%)  Top $${(S + t.straddle).toFixed(2)}  Bottom $${(S - t.straddle).toFixed(2)}`);
+  if (kind === "bull_put") { const a = (S + sh.strike) / 2; P("50% alert", `$${a.toFixed(2)}  (${pct(a / S - 1)})`); }
+  if (kind === "bull_put" || kind === "bear_call") L.push(`Stop loss (2x premium): close at $${(3 * st.perUnit).toFixed(2)} debit${q > 1 ? " each" : ""}  (loss ${money(2 * st.credit)})`);
+  if (t.earnings) { const e = parseD(t.earnings); P("Earnings", fmtD(e) + (e <= exp && e >= todayD() ? "  ⚠ before expiry" : e > exp ? "  (after expiry)" : "")); }
+  L.push("", `Volatility (${o.live ? "live" : "at entry"})`);
+  if (sh.iv) L.push(`IV ${sh.strike} ${sh.right === "P" ? "put" : "call"} (${kind === "csp" || kind === "covered_call" ? "strike" : "short strike"}):`.padEnd(29) + (sh.iv * 100).toFixed(1) + "%");
+  if (t.hv) L.push("Historical volatility (30d): " + (+t.hv).toFixed(1) + "%");
+  if (t.ivpct != null && t.ivpct !== "") L.push("IV percentile (52w):         " + Math.round(t.ivpct) + "%");
+  return L.join("\n");
+}
+
+/* ---------- chart ---------- */
+function niceTicks(lo, hi, n) { const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
+  const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag, out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10)); return out; }
+function drawChart(svg, tip, t, o = {}) {
+  const W = 820, H = 380, m = { l: 62, r: 16, t: 26, b: 34 };
+  const st = stats(t), sh = st.short, S0 = t.S, Tnow = o.Tnow, ivs = o.ivs;
+  const ks = t.legs.map(l => l.strike);
+  let x0, x1;
+  if (t.kind === "bear_call") { x0 = Math.min(S0, ...ks) * 0.92; x1 = Math.max(...ks) + 0.06 * S0; }
+  else if (t.kind === "covered_call") { x0 = Math.min(S0, t.stock.basis) * 0.82; x1 = Math.max(...ks, S0) * 1.12; }
+  else if (t.kind === "csp") { x0 = sh.strike * 0.78; x1 = Math.max(S0, sh.strike) * 1.12; }
+  else { x0 = Math.min(...ks) - 0.06 * S0; x1 = Math.max(S0, ...ks) * 1.08; }
+  if (o.marker) { x0 = Math.min(x0, o.marker.S * 0.97); x1 = Math.max(x1, o.marker.S * 1.03); }
+  const N = 240, xs = Array.from({ length: N + 1 }, (_, i) => x0 + (x1 - x0) * i / N);
+  const ye = xs.map(S => pnlAt(t, S, 0)), yt = xs.map(S => pnlAt(t, S, Tnow, ivs));
+  let y0 = Math.min(...ye, ...yt, 0), y1 = Math.max(...ye, ...yt, 0); if (o.marker) { y0 = Math.min(y0, o.marker.v); y1 = Math.max(y1, o.marker.v); }
+  const pad = (y1 - y0) * 0.1 || 10; y0 -= pad; y1 += pad;
+  const X = v => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r), Y = v => m.t + (y1 - v) / (y1 - y0) * (H - m.t - m.b);
+  const path = ys => xs.map((x, i) => (i ? "L" : "M") + X(x).toFixed(1) + "," + Y(ys[i]).toFixed(1)).join("");
+  let h = "";
+  niceTicks(y0, y1, 6).forEach(v => { h += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${money(v)}</text>`; });
+  niceTicks(x0, x1, 8).forEach(v => { h += `<line x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--line)" stroke-width="1" opacity=".6"/><text x="${X(v)}" y="${H - m.b + 16}" text-anchor="middle">${v}</text>`; });
+  h += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="1"/>`;
+  const vline = (x, label, dash, col) => { if (x < x0 || x > x1) return; h += `<line x1="${X(x)}" x2="${X(x)}" y1="${m.t}" y2="${H - m.b}" stroke="${col}" stroke-width="1.2" ${dash ? 'stroke-dasharray="4 4"' : ""}/><text x="${X(x) + 4}" y="${m.t + 10}" fill="${col}">${label}</text>`; };
+  vline(st.be, "B/E " + st.be.toFixed(2), false, "var(--muted)");
+  if (t.kind === "bull_put") { const a = (t.entryS || S0) + sh.strike; vline(a / 2, "50% " + (a / 2).toFixed(2), false, "var(--warn)"); }
+  vline(t.entryS || S0, (o.marker ? "entry " : t.ticker + " ") + (t.entryS || S0).toFixed(2), true, "var(--ink)");
+  h += `<path d="${path(ye)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
+  h += `<path d="${path(yt)}" fill="none" stroke="var(--today)" stroke-width="2.2"/>`;
+  h += `<text x="${W - m.r}" y="${Y(st.maxG) - 6}" text-anchor="end" fill="var(--ink)">Max gain ${money(st.maxG)}</text>`;
+  if (Y(st.maxL) < H - m.b - 4) h += `<text x="${t.kind === "bear_call" ? W - m.r : m.l + 4}" y="${Y(st.maxL) - 6}" text-anchor="${t.kind === "bear_call" ? "end" : "start"}" fill="var(--ink)">Max loss ${money(-st.maxL)}</text>`;
+  if (o.marker) h += `<circle cx="${X(o.marker.S)}" cy="${Y(o.marker.v)}" r="6" fill="var(--ink)" stroke="var(--panel)" stroke-width="2"/><text x="${X(o.marker.S) + 9}" y="${Y(o.marker.v) - 8}" fill="var(--ink)">now ${o.marker.S.toFixed(2)} · ${money(o.marker.v)}</text>`;
+  h += `<line id="xh" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" stroke-width="1" opacity="0"/><rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" class="hit"/>`;
+  svg.innerHTML = h;
+  const xh = svg.querySelector("#xh"), hit = svg.querySelector(".hit");
+  const move = e => { const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W; const S = x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0);
+    if (S < x0 || S > x1) return; xh.setAttribute("x1", px); xh.setAttribute("x2", px); xh.setAttribute("opacity", ".6");
+    tip.textContent = `${t.ticker} ${S.toFixed(2)} (${pct(S / S0 - 1)})  ·  at expiry ${money(pnlAt(t, S, 0))}  ·  today ${money(pnlAt(t, S, Tnow, ivs))}`; };
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerleave", () => xh.setAttribute("opacity", "0"));
+}
+function greeksTable(tbl, t, S, Tyrs, ivs) {
+  const { rows, tot } = greeksRows(t, S, Tyrs, ivs), beta = +t.beta || 1;
+  const f = (v, d = 2) => sgn(v, d), fm = v => (v >= 0 ? "+" : "-") + Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  let h = `<tr><th>Leg</th><th>Pos</th><th>δ</th><th>Δ</th><th>Delta $</th><th>Beta Δ $ (β ${beta})</th><th>Gamma</th><th>Theta $/day</th><th>Vega $/pt</th><th>Rho $/1%</th></tr>`;
+  rows.forEach(r => { h += `<tr><td>${r.name}</td><td>${r.pos > 0 ? "+" : ""}${r.pos}</td><td>${f(r.d, 4)}</td><td>${f(r.D)}</td><td>${fm(r.D * S)}</td><td>${fm(r.D * S * beta)}</td><td>${f(r.gm, 4)}</td><td>${f(r.th)}</td><td>${f(r.vg)}</td><td>${f(r.rh)}</td></tr>`; });
+  h += `<tr class="tot"><td>Total</td><td></td><td></td><td>${f(tot.D)}</td><td>${fm(tot.D * S)}</td><td>${fm(tot.D * S * beta)}</td><td>${f(tot.gm, 4)}</td><td>${f(tot.th)}</td><td>${f(tot.vg)}</td><td>${f(tot.rh)}</td></tr>`;
+  tbl.innerHTML = h;
+}
+
+/* ---------- calculator form ---------- */
+const $ = s => document.querySelector(s);
+const LEGSPEC = { bull_put: [["P", -1, "Sell put"], ["P", 1, "Buy put"]], bear_call: [["C", -1, "Sell call"], ["C", 1, "Buy call"]], csp: [["P", -1, "Sell put"]], covered_call: [["C", -1, "Sell call"]] };
+const EXAMPLE = { kind: "bull_put", legs: [[165, 3.725], [160, 2.925]] };
+function buildLegs(kind, vals) {
+  const box = $("#legs"); box.innerHTML = "";
+  LEGSPEC[kind].forEach(([r, n, lab], i) => { const v = vals?.[i] || [];
+    box.insertAdjacentHTML("beforeend", `<div class="leg"><span class="tag ${n < 0 ? "s" : "l"}">${lab.replace(" ", "<br>")}</span>
+      <label>Strike <input id="k${i}" type="number" step="0.5" value="${v[0] ?? ""}"></label>
+      <label>Price <input id="p${i}" type="number" step="0.01" value="${v[1] ?? ""}"></label></div>`); });
+  $("#stockrow").hidden = kind !== "covered_call";
+}
+function readForm() {
+  const kind = $("#kind").value, qty = Math.max(1, +$("#qty").value || 1), S = +$("#S").value;
+  const legs = LEGSPEC[kind].map(([r, n], i) => ({ right: r, n: n * qty, strike: +$("#k" + i).value, price: +$("#p" + i).value }));
+  const t = { kind, ticker: $("#ticker").value.trim().toUpperCase(), expiry: $("#expiry").value, qty, legs, S,
+    hv: +$("#hv").value || null, ivpct: $("#ivpct").value === "" ? null : +$("#ivpct").value, straddle: +$("#straddle").value || 0,
+    beta: +$("#beta").value || 1, earnings: $("#earn").value || null, opened: $("#opened").value || null, stock: null, adj: 0 };
+  if (kind === "covered_call") t.stock = { shares: 100 * qty, basis: +$("#basis").value || S };
+  const ro = +$("#r_orig").value, rc = +$("#r_close").value, rq = +$("#r_qty").value || 1;
+  if (ro || rc) t.adj = (ro - rc) * 100 * rq;
+  return t;
+}
+function valid(t) { return t.ticker && t.expiry && t.S > 0 && t.legs.every(l => l.strike > 0 && l.price > 0) && parseD(t.expiry) > (t.opened ? parseD(t.opened) : todayD()) - DAY; }
+function renderCalc() {
+  const t = readForm();
+  if (!valid(t)) { $("#calc").textContent = "Fill in ticker, expiry, stock price and each leg's strike and price."; $("#chart").innerHTML = ""; $("#greeks").innerHTML = ""; return; }
+  const open = t.opened ? parseD(t.opened) : todayD(), T = Math.max(daysBetween(open, parseD(t.expiry)), 0) / 365;
+  t.legs.forEach(l => { l.iv = solveIV(l.right, t.S, l.strike, T, l.price) || 0.3; });
+  const camp = t.adj && t.opened ? null : null;
+  $("#outtitle").textContent = `${t.ticker} ${NAMES[t.kind]}`;
+  drawChart($("#chart"), $("#tip"), t, { Tnow: T });
+  greeksTable($("#greeks"), t, t.S, T);
+  $("#calc").textContent = calcText(t, { live: !t.opened, campaignDays: camp || undefined });
+  try { localStorage.setItem("pd-form", JSON.stringify(formState())); } catch (e) {}
+}
+const FIELDS = ["kind", "ticker", "expiry", "qty", "S", "basis", "hv", "ivpct", "straddle", "beta", "earn", "opened", "r_orig", "r_close", "r_qty"];
+function formState() { const o = {}; FIELDS.forEach(f => o[f] = $("#" + f).value); o.legs = LEGSPEC[o.kind].map((_, i) => [$("#k" + i).value, $("#p" + i).value]); return o; }
+function loadState(o) { FIELDS.forEach(f => { if (o[f] != null) $("#" + f).value = o[f]; }); buildLegs(o.kind, o.legs); }
+function msg(el, text, cls) { el.hidden = !text; el.className = "msg" + (cls ? " " + cls : ""); el.textContent = text || ""; }
+
+/* ---------- IBKR via connector ---------- */
+let mcp = null, sample = null, db = null, uid = null;
+const ERRCOPY = { needs_reauth: `Reconnect ${SERVER} in claude.ai Settings → Connectors, then try again.`,
+  server_not_connected: `Add the ${SERVER} connector in claude.ai Settings → Connectors to use live data.`,
+  selection_required: "Choose which IBKR connection this page should use in the prompt claude.ai shows, then try again.",
+  not_in_manifest: "IBKR access is turned off for this page. Turn it on from the page's Permissions menu.",
+  approval_required: "IBKR access needs your approval. Click again and choose Allow.",
+  blocked_by_policy: "Your organization blocks this IBKR tool.", server_unavailable: "IBKR didn't answer in time. Try again in a moment." };
+const errText = e => ERRCOPY[e?.code] || (e?.code === "tool_error" ? "IBKR reported: " + (e.message || "an error") : "IBKR request failed: " + (e?.message || e?.code || "unknown error"));
+async function ib(tool, input, cacheMs) { const r = await mcp.callTool(SERVER, tool, input, cacheMs ? { cache: { staleTime: cacheMs, gcTime: Math.max(cacheMs, 300000) } } : undefined); return r.payload; }
+const conCache = {};
+async function underlying(tk) {
+  if (conCache[tk]) return conCache[tk];
+  const p = await ib("search_contracts", { query: tk }, 86400000);
+  const rows = (p?.results || []).filter(r => r.symbol === tk && r.underlying_contract_id);
+  const r = rows.find(r => r.country_code === "US" && (r.sections || []).some(s => s.security_type === "OPT")) || rows.find(r => r.country_code === "US") || rows[0];
+  if (!r) throw { code: "tool_error", message: `no US listing found for ${tk}` };
+  return conCache[tk] = r.underlying_contract_id;
+}
+async function stockSnap(tk) {
+  const id = await underlying(tk);
+  const p = await ib("get_price_snapshot", { contract_id: id, market_data_names: ["last", "bid_ask", "historical_vol", "implied_volatility_percentile"] }, 30000);
+  const last = p?.last?.price ?? ((p?.["bid-ask"]?.bid + p?.["bid-ask"]?.ask) / 2);
+  return { S: last, hv: p?.["historical-vol"]?.annual_pct != null ? p["historical-vol"].annual_pct * 100 : null,
+    ivpct: p?.["implied-volatility-percentile"]?.high_52w != null ? p["implied-volatility-percentile"].high_52w * 100 : null, id };
+}
+async function expiryId(id, tk, expiryIso) {
+  const p = await ib("get_option_parameters", { underlying_contract_id: id }, 3600000), want = expiryIso.replace(/-/g, "");
+  const ex = (p?.expirations || []).filter(e => e.date === want);
+  const e = ex.find(e => e.trading_class === tk) || ex[0];
+  if (!e) throw { code: "tool_error", message: `${tk} has no ${fmtD(parseD(expiryIso))} expiry` };
+  return e.id;
+}
+async function chain(eid, lo, hi) { const p = await ib("get_option_data", { expiration_id: eid, min_strike: lo, max_strike: hi }, 3600000); return (p?.contracts || []).map(c => ({ ...c, strike: +c.strike })); }
+async function optSnap(cid) { const p = await ib("get_price_snapshot", { contract_id: cid, exchange: "SMART", market_data_names: ["bid_ask", "plprice", "option_midpoint_iv"] }, 30000);
+  const mark = p?.plprice?.price ?? ((p?.["bid-ask"]?.bid + p?.["bid-ask"]?.ask) / 2); return { mark, bid: p?.["bid-ask"]?.bid, ask: p?.["bid-ask"]?.ask }; }
+
+async function fetchLive() {
+  const btn = $("#live"), m = $("#formmsg");
+  if (!mcp) return msg(m, ERRCOPY.server_not_connected, "err");
+  const t = readForm(); if (!t.ticker || !t.expiry) return msg(m, "Enter a ticker and expiry first.", "err");
+  btn.disabled = true; msg(m, `Fetching ${t.ticker} from IBKR…`);
+  try {
+    const s = await stockSnap(t.ticker);
+    $("#S").value = s.S.toFixed(2); if (s.hv != null) $("#hv").value = s.hv.toFixed(1); if (s.ivpct != null) $("#ivpct").value = Math.round(s.ivpct);
+    const eid = await expiryId(s.id, t.ticker, t.expiry);
+    const ks = t.legs.map(l => l.strike).filter(k => k > 0);
+    const notes = [];
+    if (ks.length) {
+      const c = await chain(eid, Math.min(...ks) - 0.01, Math.max(...ks) + 0.01);
+      for (let i = 0; i < t.legs.length; i++) { const l = t.legs[i], row = c.find(r => Math.abs(r.strike - l.strike) < 1e-6);
+        if (!row) { notes.push(`no ${l.strike} strike`); continue; }
+        const o = await optSnap(l.right === "P" ? row.put_contract_id : row.call_contract_id);
+        if (o.mark > 0) $("#p" + i).value = o.mark.toFixed(2);
+        if (o.bid != null) notes.push(`${l.strike}${l.right} ${o.bid}/${o.ask}`); }
+    }
+    const atm = await chain(eid, s.S * 0.95, s.S * 1.05);
+    if (atm.length) { const r = atm.reduce((a, b) => Math.abs(b.strike - s.S) < Math.abs(a.strike - s.S) ? b : a);
+      const [cl, pu] = await Promise.all([optSnap(r.call_contract_id), optSnap(r.put_contract_id)]);
+      if (cl.mark > 0 && pu.mark > 0) $("#straddle").value = (cl.mark + pu.mark).toFixed(2); }
+    $("#opened").value = ""; $("#example").hidden = true;
+    msg(m, "Live marks loaded" + (notes.length ? " · bid/ask " + notes.join(", ") : "") + ". Prices are IBKR marks; type your fill over them if different.", "ok");
+    renderCalc();
+  } catch (e) { msg(m, errText(e), "err"); } finally { btn.disabled = false; }
+}
+
+async function readShot(file) {
+  const m = $("#formmsg");
+  if (!sample) return msg(m, "Reading screenshots needs Claude access, which isn't available in this view.", "err");
+  msg(m, "Reading the screenshot…");
+  const prompt = `This is a screenshot from Interactive Brokers showing an option trade, order ticket or fill. Extract the trade.
+Reply with only JSON: {"ticker": string, "kind": "bull_put"|"bear_call"|"csp"|"covered_call", "expiry": "YYYY-MM-DD", "qty": number, "stock": number|null,
+"legs": [{"right":"P"|"C","side":"sell"|"buy","strike":number,"price":number|null}]}.
+Rules: a sold put with a bought lower put is bull_put; a sold call with a bought higher call is bear_call; a single sold put is csp; a single sold call is covered_call.
+Use the fill or limit price per leg if shown, else the mid of bid/ask. Assume the year is ${new Date().getFullYear()} unless shown. stock is the underlying price if visible.`;
+  try {
+    const j = await sample.json(prompt, { images: [file] });
+    if (!j || !j.legs) throw { code: "invalid_json" };
+    const kind = NAMES[j.kind] ? j.kind : "bull_put"; $("#kind").value = kind;
+    const legs = [...j.legs].sort((a, b) => (a.side === "sell" ? -1 : 1) - (b.side === "sell" ? -1 : 1));
+    buildLegs(kind, legs.map(l => [l.strike, l.price ?? ""]));
+    if (j.ticker) $("#ticker").value = String(j.ticker).toUpperCase(); if (j.expiry) $("#expiry").value = j.expiry;
+    if (j.qty) $("#qty").value = j.qty; if (j.stock) $("#S").value = j.stock; $("#opened").value = ""; $("#example").hidden = true;
+    msg(m, "Screenshot read. Check the legs, then click Get live data to fill IV and volatility.", "ok"); renderCalc();
+  } catch (e) {
+    msg(m, e?.code === "not_granted" || e?.code === "sampling_disabled" ? "Claude access for this page wasn't allowed, so screenshots can't be read here." :
+      e?.code === "image_rejected" ? "That image couldn't be read. Try a PNG or JPEG screenshot." : e?.code === "rate_limited" ? "Too many requests just now. Try again in a minute." :
+      "Couldn't read a trade from that screenshot. Try a clearer crop of the order ticket.", "err");
+  }
+}
+
+/* ---------- journal ---------- */
+let journal = [], live = {}, posCache = null;
+const tradesCol = () => db.collection("data/users/" + uid);
+const keyOf = t => [t.ticker, t.expiry, ...t.legs.map(l => `${l.n < 0 ? "S" : "L"}${l.right}${l.strike}`)].join("|");
+function parseDesc(d) { const m = /^(\S+)\s+([A-Z][a-z]{2})(\d{2})'(\d{2})\s+([\d.]+)\s+(PUT|CALL)/.exec(d || "");
+  if (!m) return null; return { ticker: m[1], expiry: iso(new Date(2000 + +m[4], MON.indexOf(m[2]), +m[3])), strike: +m[5], right: m[6][0] }; }
+function groupPositions(pos) {
+  const opts = [], stocks = {};
+  for (const p of pos) { if (!p.position) continue;
+    if (p.asset_class === "STK") stocks[p.contract_description] = { shares: p.position, basis: p.average_price };
+    else if (p.asset_class === "OPT") { const d = parseDesc(p.contract_description); if (d) opts.push({ ...d, pos: p.position, avg: p.average_price, mark: p.market_price, cid: p.contract_id }); } }
+  const out = [], key = o => o.ticker + "|" + o.expiry + "|" + o.right;
+  const groups = {}; opts.forEach(o => (groups[key(o)] ||= []).push(o));
+  for (const g of Object.values(groups)) {
+    const shorts = g.filter(o => o.pos < 0).map(o => ({ ...o, left: -o.pos })), longs = g.filter(o => o.pos > 0).map(o => ({ ...o, left: o.pos }));
+    const isPut = g[0].right === "P";
+    shorts.sort((a, b) => isPut ? b.strike - a.strike : a.strike - b.strike);
+    for (const s of shorts) {
+      const cands = longs.filter(l => l.left > 0 && (isPut ? l.strike < s.strike : l.strike > s.strike)).sort((a, b) => Math.abs(a.strike - s.strike) - Math.abs(b.strike - s.strike));
+      for (const l of cands) { if (!s.left) break; const q = Math.min(s.left, l.left); s.left -= q; l.left -= q;
+        out.push({ kind: isPut ? "bull_put" : "bear_call", ticker: s.ticker, expiry: s.expiry, qty: q, legs: [{ right: s.right, n: -q, strike: s.strike, price: s.avg, cid: s.cid }, { right: l.right, n: q, strike: l.strike, price: l.avg, cid: l.cid }] }); }
+      if (s.left) {
+        if (isPut) out.push({ kind: "csp", ticker: s.ticker, expiry: s.expiry, qty: s.left, legs: [{ right: "P", n: -s.left, strike: s.strike, price: s.avg, cid: s.cid }] });
+        else { const st = stocks[s.ticker]; if (st && st.shares >= 100 * s.left) { st.shares -= 100 * s.left;
+          out.push({ kind: "covered_call", ticker: s.ticker, expiry: s.expiry, qty: s.left, stock: { shares: 100 * s.left, basis: st.basis }, legs: [{ right: "C", n: -s.left, strike: s.strike, price: s.avg, cid: s.cid }] }); } }
+      }
+    }
+  }
+  return out;
+}
+async function positions(fresh) { if (!fresh && posCache) return posCache; const p = await ib("get_account_positions", {}, fresh ? 0 : 30000); return posCache = p?.positions || []; }
+const label = c => `${c.ticker} ${NAMES[c.kind]} ${c.legs.map(l => l.strike).join("/")} ${fmtD(parseD(c.expiry))} x${c.qty}`;
+
+async function startImport() {
+  const m = $("#jmsg"), box = $("#cands");
+  if (!mcp) return msg(m, ERRCOPY.server_not_connected, "err");
+  if (!db || !uid) return msg(m, "Saving trades needs you signed in to claude.ai with access to this page.", "err");
+  msg(m, "Reading your IBKR positions…"); box.hidden = true;
+  try {
+    const have = new Set(journal.map(j => j.key));
+    const cands = groupPositions(await positions(true)).map(c => ({ ...c, key: keyOf(c) })).filter(c => !have.has(c.key));
+    if (!cands.length) return msg(m, "Everything open in IBKR is already in your journal.", "ok");
+    msg(m, `Found ${cands.length} trade${cands.length > 1 ? "s" : ""} not in your journal. Untick any you don't want, then add.`);
+    box.innerHTML = `<div class="cands">${cands.map((c, i) => `<label class="cand"><input type="checkbox" id="c${i}" checked> ${label(c)}</label>`).join("")}</div><button class="b" id="addsel">Add selected</button>`;
+    box.hidden = false;
+    $("#addsel").onclick = () => addCands(cands.filter((_, i) => $("#c" + i).checked));
+  } catch (e) { msg(m, errText(e), "err"); }
+}
+async function addCands(list) {
+  const m = $("#jmsg"), btn = $("#addsel"); btn.disabled = true;
+  let trades = []; try { trades = (await ib("get_account_trades", { period: "DAYS_90" }, 60000))?.trades || []; } catch (e) {}
+  let done = 0;
+  for (const c of list) {
+    msg(m, `Adding ${label(c)} (${++done}/${list.length})…`);
+    try { await tradesCol().doc().set(await entryFor(c, trades)); }
+    catch (e) { msg(m, `${label(c)}: ${e?.code === "quota_exceeded" ? "journal is full; delete closed trades first" : errText(e)}`, "err"); btn.disabled = false; return; }
+  }
+  $("#cands").hidden = true; msg(m, `Added ${list.length} trade${list.length > 1 ? "s" : ""}.`, "ok"); refreshLive();
+}
+async function entryFor(c, trades) {
+  const sh = c.legs.find(l => l.n < 0);
+  const fills = trades.filter(x => x.symbol === c.ticker && x.sec_type === "OPT" && x.side === "SELL").map(x => ({ x, d: Math.abs(x.price - sh.price) })).filter(o => o.d <= 0.06).sort((a, b) => a.d - b.d || (b.x.trade_time > a.x.trade_time ? 1 : -1));
+  const fill = fills[0]?.x; const when = fill ? new Date(fill.trade_time) : null;
+  const id = await underlying(c.ticker); let S = null, hv = null;
+  try {
+    const daily = await ib("get_price_history", { contract_id: id, security_type: "STK", step: "ONE_DAY", period: "THREE_MONTHS", outside_rth: false }, 3600000);
+    const cutoff = when || new Date(); const closes = []; (daily?.time || []).forEach((tm, i) => { if (new Date(tm) < new Date(cutoff.toISOString().slice(0, 10) + "T00:00:00Z")) closes.push(daily.close[i]); });
+    if (when) { const age = (Date.now() - when) / DAY, period = age <= 6 ? "ONE_WEEK" : age <= 13 ? "TWO_WEEKS" : age <= 29 ? "ONE_MONTH" : null;
+      if (period) { const h = await ib("get_price_history", { contract_id: id, security_type: "STK", step: "THIRTY_MINS", period, outside_rth: false }, 3600000);
+        (h?.time || []).forEach((tm, i) => { const t0 = new Date(tm), f = (when - t0) / 1800000; if (f >= 0 && f < 1) S = h.open[i] + (h.close[i] - h.open[i]) * f; }); }
+      if (S == null) { const i = (daily?.time || []).findIndex(tm => tm.slice(0, 10) === when.toISOString().slice(0, 10)); if (i >= 0) S = daily.close[i]; } }
+    const series = closes.slice(-31).concat(S ? [S] : []); if (series.length > 10) { const r = series.slice(1).map((v, i) => Math.log(v / series[i])); const mu = r.reduce((a, b) => a + b, 0) / r.length;
+      hv = Math.sqrt(r.reduce((a, b) => a + (b - mu) ** 2, 0) / (r.length - 1)) * Math.sqrt(252) * 100; }
+  } catch (e) {}
+  const snap = await stockSnap(c.ticker);
+  if (S == null) S = snap.S;
+  const opened = when ? iso(new Date(when.getFullYear(), when.getMonth(), when.getDate())) : iso(todayD());
+  const T = Math.max(daysBetween(parseD(opened), parseD(c.expiry)), 0) / 365;
+  const legs = c.legs.map(l => ({ ...l, iv: solveIV(l.right, S, l.strike, T, l.price) || null }));
+  return { key: c.key, kind: c.kind, ticker: c.ticker, expiry: c.expiry, qty: c.qty, legs, stock: c.stock || null, adj: 0, S: +S.toFixed(2),
+    opened, openedTime: when ? when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " local" : null, fillFound: !!when,
+    hv: hv != null ? +hv.toFixed(1) : snap.hv, ivpct: snap.ivpct != null ? Math.round(snap.ivpct) : null, straddle: 0, beta: 1, earnings: null, status: "open", createdAt: new Date().toISOString() };
+}
+async function refreshLive() {
+  if (!mcp || !journal.length) return renderJournal();
+  const m = $("#jmsg"); msg(m, "Updating prices from IBKR…");
+  try {
+    const pos = await positions(true); const byCid = {}; pos.forEach(p => byCid[p.contract_id] = p);
+    const tks = [...new Set(journal.filter(j => j.status === "open").map(j => j.ticker))];
+    const snaps = {}; await Promise.all(tks.map(async tk => { try { snaps[tk] = await stockSnap(tk); } catch (e) { snaps[tk] = { err: e }; } }));
+    live = {};
+    for (const j of journal) { const s = snaps[j.ticker]; if (!s || s.err) continue;
+      const marks = j.legs.map(l => byCid[l.cid]?.market_price); const inIb = j.legs.every(l => byCid[l.cid] && byCid[l.cid].position);
+      live[j.id] = { S: s.S, marks, inIb, ivpct: s.ivpct, hv: s.hv }; }
+    msg(m, "Prices updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ".", "ok");
+  } catch (e) { msg(m, errText(e), "err"); }
+  renderJournal();
+}
+function nowState(j) {
+  const L = live[j.id], exp = parseD(j.expiry), dte = Math.max(daysBetween(todayD(), exp), 0), T = dte / 365;
+  if (!L) return { dte, T };
+  const ivs = j.legs.map((l, i) => L.marks[i] > 0 ? solveIV(l.right, L.S, l.strike, T, L.marks[i]) : l.iv);
+  let v = j.adj || 0; j.legs.forEach((l, i) => v += l.n * 100 * ((L.marks[i] ?? l.price) - l.price)); if (j.stock) v += j.stock.shares * (L.S - j.stock.basis);
+  return { dte, T, S: L.S, ivs, v, L };
+}
+function chipsFor(j, n, st) {
+  const c = [], sh = st.short, S = n.S; if (S == null) return `<span class="chip">no live price</span>`;
+  if (n.L && !n.L.inIb) c.push(`<span class="chip w">not in IBKR · closed?</span>`);
+  if (j.kind === "bull_put") { const a = (j.S + sh.strike) / 2, val = j.legs.reduce((x, l, i) => x - Math.sign(l.n) * (n.L.marks[i] ?? 0), 0);
+    if (val >= 3 * st.perUnit) c.push(`<span class="chip r">stop hit</span>`); if (S < sh.strike) c.push(`<span class="chip r">below short strike</span>`); else if (S <= a) c.push(`<span class="chip w">50% alert</span>`); }
+  if (j.kind === "bear_call") { const val = j.legs.reduce((x, l, i) => x - Math.sign(l.n) * (n.L.marks[i] ?? 0), 0);
+    if (val >= 3 * st.perUnit) c.push(`<span class="chip r">stop hit</span>`); if (S > sh.strike) c.push(`<span class="chip r">above short strike</span>`); }
+  if (j.kind === "csp" && S < sh.strike) c.push(`<span class="chip r">in the money</span>`);
+  if (j.kind === "covered_call" && S > sh.strike) c.push(`<span class="chip w">above strike</span>`);
+  if (j.earnings) { const e = parseD(j.earnings); if (e >= todayD() && e <= parseD(j.expiry)) c.push(`<span class="chip w">earnings ${fmtD(e)}</span>`); }
+  if (!c.length) c.push(`<span class="chip g">on track</span>`);
+  return c.join("");
+}
+let openId = null;
+function renderJournal() {
+  const box = $("#trades"); $("#jempty").hidden = !!journal.length;
+  box.querySelectorAll(".trade").forEach(e => e.remove());
+  const list = [...journal].sort((a, b) => a.expiry.localeCompare(b.expiry));
+  for (const j of list) {
+    const st = stats(j), n = nowState(j), sh = st.short;
+    const el = document.createElement("article"); el.className = "trade";
+    const pl = n.v != null ? `<b class="${n.v >= 0 ? "pos" : "neg"}">${money(n.v)}</b>` : "<b>–</b>";
+    el.innerHTML = `<button class="head" aria-expanded="${openId === j.id}">
+      <div class="tk">${j.ticker}<span>${NAMES[j.kind]} ${j.legs.map(l => l.strike).join("/")} ×${j.qty}</span></div>
+      <div class="kv">Expiry<b>${fmtD(parseD(j.expiry))} · ${n.dte}d</b></div>
+      <div class="kv">Price<b>${n.S != null ? n.S.toFixed(2) : "–"}</b></div>
+      <div class="kv">P&amp;L<b>${pl}</b></div>
+      <div class="kv">of max<b>${n.v != null ? Math.round(n.v / st.maxG * 100) + "%" : "–"}</b></div>
+      <div class="chips">${chipsFor(j, n, st)}</div></button>`;
+    if (openId === j.id) {
+      const body = document.createElement("div"); body.className = "body";
+      body.innerHTML = `<div class="legend"><span><i style="background:var(--accent)"></i>At expiry</span><span><i style="background:var(--today)"></i>Today (${n.dte} DTE)</span>${n.S != null ? '<span><i style="background:var(--ink);height:8px;width:8px;border-radius:50%"></i>Now</span>' : ""}</div>
+        <svg class="chart" viewBox="0 0 820 380" role="img" aria-label="${j.ticker} profit and loss"></svg><div class="tip"></div><div class="tbl"><table></table></div>
+        <div class="inline">
+          <label>Earnings <input type="date" data-f="earnings" value="${j.earnings || ""}"></label>
+          <label>Beta <input type="number" step="0.01" data-f="beta" value="${j.beta || 1}"></label>
+          <label>Straddle at entry $ <input type="number" step="0.01" data-f="straddle" value="${j.straddle || ""}"></label>
+          <label>Carried credit $ <input type="number" step="1" data-f="adj" value="${j.adj || ""}"></label></div>
+        <div class="two"><div><div class="calchead"><h3>At entry</h3><button class="b ghost" data-copy="e">Copy</button></div><pre class="calc" data-c="e"></pre></div>
+        <div><div class="calchead"><h3>Now</h3><button class="b ghost" data-copy="n">Copy</button></div><pre class="calc" data-c="n"></pre></div></div>
+        <div class="btns"><button class="b ghost" data-act="close">Mark closed &amp; remove</button></div>${j.fillFound ? "" : '<p class="note">Fill time not found in the last 90 days of trades, so entry uses the price on the day it was imported.</p>'}`;
+      el.append(body);
+      const tt = { ...j, entryS: j.S };
+      drawChart(body.querySelector("svg"), body.querySelector(".tip"), tt, { Tnow: n.T, ivs: n.ivs, marker: n.S != null ? { S: n.S, v: n.v } : null });
+      greeksTable(body.querySelector("table"), j, n.S ?? j.S, n.T, n.ivs);
+      body.querySelector('[data-c="e"]').textContent = calcText(j);
+      body.querySelector('[data-c="n"]').textContent = n.S != null ? nowText(j, n, st) : "Click Refresh prices for live figures.";
+      body.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => copy(body.querySelector(`[data-c="${b.dataset.copy}"]`)));
+      body.querySelectorAll("[data-f]").forEach(inp => inp.onchange = () => saveField(j, inp.dataset.f, inp.value));
+      body.querySelector('[data-act="close"]').onclick = e => confirmDelete(e.target, j);
+    }
+    el.querySelector(".head").onclick = () => { openId = openId === j.id ? null : j.id; renderJournal(); };
+    box.append(el);
+  }
+}
+function nowText(j, n, st) {
+  const L = [], P = (k, v) => L.push((k + ":").padEnd(20) + v), sh = st.short;
+  L.push(`${j.ticker} ${NAMES[j.kind]} | now | ${n.dte} DTE left`);
+  P("Stock price", `$${n.S.toFixed(2)}  (${pct(n.S / j.S - 1)} since entry)`);
+  const val = j.legs.reduce((x, l, i) => x - Math.sign(l.n) * (n.L.marks[i] ?? 0), 0);
+  P("Cost to close", `$${val.toFixed(2)} per ${j.kind === "csp" || j.kind === "covered_call" ? "share" : "spread"}`);
+  P("Open P&L", `${money(n.v)}  (${Math.round(n.v / st.maxG * 100)}% of max gain)`);
+  P(j.kind === "bear_call" || j.kind === "covered_call" ? "To short strike" : "To short strike", pct(sh.strike / n.S - 1));
+  if (j.kind === "bull_put") { const a = (j.S + sh.strike) / 2; P("50% alert", `$${a.toFixed(2)}  ${n.S <= a ? "HIT" : "(" + pct(a / n.S - 1) + " away)"}`); }
+  if (j.kind === "bull_put" || j.kind === "bear_call") P("Stop", `close at $${(3 * st.perUnit).toFixed(2)} debit  ${val >= 3 * st.perUnit ? "HIT" : "(not hit)"}`);
+  const sIv = n.ivs?.[j.legs.indexOf(sh)]; if (sIv) P("IV short strike", (sIv * 100).toFixed(1) + "%");
+  if (n.L.hv != null) P("HV 30d", n.L.hv.toFixed(1) + "%"); if (n.L.ivpct != null) P("IV percentile", Math.round(n.L.ivpct) + "%");
+  return L.join("\n");
+}
+let saving = Promise.resolve();
+function saveField(j, f, v) { const val = f === "earnings" ? (v || null) : (v === "" ? (f === "beta" ? 1 : 0) : +v);
+  saving = saving.then(() => tradesCol().doc(j.id).update({ [f]: val })).catch(e => msg($("#jmsg"), "Couldn't save that change: " + (e?.message || e?.code), "err")); }
+function confirmDelete(btn, j) {
+  if (btn.dataset.armed) { tradesCol().doc(j.id).delete().catch(e => msg($("#jmsg"), "Couldn't remove: " + (e?.message || e?.code), "err")); openId = null; return; }
+  btn.dataset.armed = "1"; btn.textContent = "Click again to remove " + j.ticker; setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = "Mark closed & remove"; } }, 4000);
+}
+async function copy(pre) { try { await navigator.clipboard.writeText(pre.textContent); flash(pre); } catch (e) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } }
+function flash(el) { el.style.outline = "2px solid var(--good)"; setTimeout(() => el.style.outline = "", 600); }
+
+/* ---------- wiring ---------- */
+function show(v) { const c = v === "calc"; $("#view-calc").hidden = !c; $("#view-journal").hidden = c; $("#tab-calc").setAttribute("aria-selected", c); $("#tab-journal").setAttribute("aria-selected", !c);
+  try { localStorage.setItem("pd-tab", v); } catch (e) {} if (!c && journal.length && !Object.keys(live).length) refreshLive(); }
+$("#tab-calc").onclick = () => show("calc"); $("#tab-journal").onclick = () => show("journal");
+$("#kind").onchange = () => { buildLegs($("#kind").value); renderCalc(); };
+$("#form").addEventListener("input", e => { if (e.target.id !== "shot") { $("#example").hidden = true; renderCalc(); } });
+$("#form").addEventListener("submit", e => e.preventDefault());
+$("#live").onclick = fetchLive; $("#shot").onchange = e => { const f = e.target.files[0]; if (f) readShot(f); e.target.value = ""; };
+$("#copy").onclick = () => copy($("#calc")); $("#import").onclick = startImport; $("#refresh").onclick = refreshLive;
+
+let saved = null; try { saved = JSON.parse(localStorage.getItem("pd-form") || "null"); } catch (e) {}
+if (saved && saved.kind) { loadState(saved); $("#example").hidden = true; } else buildLegs("bull_put", EXAMPLE.legs);
+renderCalc();
+try { if (localStorage.getItem("pd-tab") === "journal") show("journal"); } catch (e) {}
+
+(async () => {
+  const [m, s, d, u] = await Promise.all(["mcp", "sample", "db", "user"].map(n => window.claude?.use?.(n).catch(() => null) ?? Promise.resolve(null)));
+  mcp = m; sample = s; db = d;
+  $("#conn").innerHTML = mcp ? `IBKR: <b>connector ready</b>` : `IBKR: <b>not available here</b> · add ${SERVER} in claude.ai Settings → Connectors`;
+  if (!sample) $("#shotlbl").hidden = true;
+  else sample.limits().then(l => { if (!l?.images) $("#shotlbl").hidden = true; }).catch(() => { $("#shotlbl").hidden = true; });
+  if (u) uid = await u.id();
+  if (db && uid) {
+    tradesCol().onSnapshot(snap => { journal = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderJournal(); if (!$("#view-journal").hidden && journal.length && !Object.keys(live).length) refreshLive(); },
+      e => msg($("#jmsg"), e?.code === "revoked" ? "" : "Journal unavailable: " + (e?.message || e?.code), e?.code === "revoked" ? "" : "err"));
+  } else { $("#jempty").innerHTML = "<b>Journal needs sign-in</b>Open this page on claude.ai while signed in to keep a trade journal. The calculator works either way."; $("#import").disabled = true; }
+})();
+</script>
