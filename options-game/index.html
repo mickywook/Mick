@@ -147,7 +147,7 @@ footer{color:var(--muted);font-size:11.5px;max-width:80ch}
 /*CORE*/
 (function(g){
 const ACCOUNT=20000,H=460,F=150,T0=H-1;
-const EXP=[{td:5,d:7},{td:15,d:21},{td:21,d:30},{td:32,d:45},{td:43,d:60},{td:64,d:90}];
+const EXP=[{td:5,d:7},{td:15,d:21},{td:21,d:30},{td:32,d:45},{td:43,d:60},{td:64,d:90},{td:128,d:180}];
 const STR={
  bps:{name:'Bull put spread',kind:'credit',type:'P',hint:'Credit. Mildly bullish. Wants IV high.'},
  bcs:{name:'Bear call spread',kind:'credit',type:'C',hint:'Credit. Mildly bearish. Wants IV high.'},
@@ -373,7 +373,7 @@ function entryChecks(st,tr){const s=snap(st),sc=st.sc,m=STR[tr.strat],C=[],add=(
  else if(sell&&s.earnIn!=null)add('pass','Earnings','This expiry ends before the earnings report.');
  if(spread){
   add(dl>=15&&dl<=30?'pass':dl>=10&&dl<15?(s.ivr>=60?'pass':'warn'):dl<=35&&dl>30?'warn':'fail','Short strike delta',`${dl} delta. Rule: 15-30 delta (15 is conservative, 30 more directional); 10-15 only when IV is high.`);
-  add(tr.td===21||tr.td===32?'pass':tr.td===43?'pass':tr.td===64?'warn':tr.td===15?'warn':'fail','Days to expiry',`${tr.dte} DTE. Sweet spot is 30-45 DTE; no new credit spreads under 21 DTE because gamma takes over.`);
+  add(tr.td===21||tr.td===32?'pass':tr.td===43?'pass':tr.td>=64?'warn':tr.td===15?'warn':'fail','Days to expiry',`${tr.dte} DTE. Sweet spot is 30-45 DTE; no new credit spreads under 21 DTE because gamma takes over.`);
   add(s.ivr>=50?'pass':s.ivr>=30?'warn':'fail','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. Rule: sell credit spreads with IV Rank above 50; at low IV they lose their edge.`);
   add(tr.ror>=.1&&tr.credit<tr.width*.5?'pass':tr.ror<.1?'fail':'warn','Credit vs risk',`Credit is ${pct(tr.ror)} of the risk. Gavin and Cohen both want at least about 11% (${'$'}50 on ${'$'}450). Over half the width means the short strike is too close.`);
   if(tr.strat==='bps'){add(s.px>s.m200?'pass':'fail','Trend gate',s.px>s.m200?'Price is above the 200-day.':'Price is below the 200-day. Rule: do not sell puts below the 200-day just because IV is high.');
@@ -400,6 +400,28 @@ function entryChecks(st,tr){const s=snap(st),sc=st.sc,m=STR[tr.strat],C=[],add=(
   else add(dl>=20&&dl<=35?'pass':dl>=12&&dl<=45?'warn':'fail','Call delta',`${dl} delta. Rule for income: 25-35 delta (20-25 when IV Rank is above 50).`);
   add(s.ivr>=25?'pass':dl>30?'fail':'warn','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. ${s.ivr<25?'Premium is thin. Do not fix that by selling closer to the money; take less, go a bit longer, or skip the cycle.':'Enough premium to be worth selling.'}`);
   add(tr.td>=21?'pass':'warn','Days to expiry',`${tr.dte} DTE. Baseline is 30-45 DTE (up to 90); weeklies mean 52 decisions a year and high gamma.`)}
+ return C}
+function cohenChecks(st,tr){const s=snap(st),w=st.w,t=st.t,C=[],add=(ok,label,msg)=>C.push({ok,label,msg}),m=STR[tr.strat];
+ const up50=w.ma[50][t]>w.ma[50][t-10],upOrRange=s.px>s.m200&&s.m200up,dnOrRange=!(s.px>s.m21&&s.m21>s.m50&&up50&&s.rsi>60);
+ const short=(a,b)=>add(tr.dte<=30?'pass':tr.dte<=45?'warn':'fail','Time to expiry',`${tr.dte} DTE. Cohen: ${a}, because time decay is fastest in the last month${b||''}.`);
+ if(tr.strat==='bps'||tr.strat==='bcs'){const put=tr.strat==='bps',cu=put?1-tr.Ks/s.px:tr.Ks/s.px-1,y=tr.credit/tr.width;
+  short('one month or less for credit spreads',' and a loser has less time to reach its maximum loss');
+  add(cu>=.1?'pass':cu>=.06?'warn':'fail','Cushion',`Short strike is ${(cu*100).toFixed(1)}% ${put?'below':'above'} the price. Cohen: try for at least a 10% cushion.`);
+  add(y>=.1?'pass':y>=.07?'warn':'fail','Yield',`Credit is ${pct(y)} of the strike width. Cohen: preferably over 10%, about $0.50 on a $5.00 spread.`);
+  if(put){add(upOrRange?'pass':'fail','Trend','Cohen: the trend should be upward or rangebound.');add(tr.Ks<s.sup?'pass':'warn','Support',`Cohen: a clear area of support well above the higher strike. Support is near ${d2(s.sup)}.`)}
+  else{add(dnOrRange?'pass':'fail','Trend','Cohen: the trend should be downward or rangebound.');add(tr.Ks>s.res?'pass':'warn','Resistance',`Cohen: a clear area of resistance well below the lower strike. Resistance is near ${d2(s.res)}.`)}}
+ if(m.kind==='debit'){const ld=Math.round(tr.ld*100),bull=tr.strat==='bcd';
+  add(tr.dte>=175?'pass':tr.dte>=90?'warn':'fail','Time to expiry',`${tr.dte} DTE. Cohen: preferably at least six months, to give yourself time to be right, and unravel the trade at least one month before expiration.`);
+  add(ld>=35&&ld<=56?'pass':ld>56?'warn':'fail','Bought strike',`Long leg is ${ld} delta. Cohen: buy at the money or slightly out of the money.`);
+  add((bull?s.px>s.m50&&s.px>s.m200:s.px<s.m50&&s.px<s.m200)?'pass':'fail','Trend',`Cohen: the trend should be ${bull?'upward with clear support':'downward with clear resistance'}.`)}
+ if(tr.strat==='csp'){short('sell the put with a maximum of one month to expiration','; multiply a one-month premium by 12 before believing a long-dated one pays more');
+  add(tr.Ks<s.px?'pass':'fail','Strike','Cohen: sell an out-of-the-money put, below the current price.');
+  add(upOrRange?'pass':'fail','Trend','Cohen: the trend should be upward with a clear area of support.');
+  add('warn','Risk','Cohen classes the naked put as high risk: the loss runs until the stock reaches zero. He prefers the bull put spread for capped risk.')}
+ if(tr.strat==='cc'){const n=tr.Ks>s.px?Math.ceil((tr.Ks-s.px)/w.step-1e-9):0;
+  add(n>=1&&n<=2?'pass':'warn','Strike',`${n?n+' strike'+(n>1?'s':'')+' out of the money':'At or in the money'}. Cohen: sell calls one or two strikes out of the money.`);
+  add(tr.dte<=30?'pass':tr.dte<=45?'warn':'fail','Time to expiry',`${tr.dte} DTE. Cohen: generally only sell the calls monthly; a month at a time nets more than selling a long way out.`);
+  add(upOrRange?'pass':'fail','Trend','Cohen: the trend should be upward or rangebound with clear support; below your stock stop-loss, exit.')}
  return C}
 function openTrade(st,tr,roll){
  if(tr.buyShares){const px=st.w.c[st.t];st.gross=(st.gross*st.shares+px*tr.buyShares)/(st.shares+tr.buyShares);st.shares+=tr.buyShares;st.cash-=px*tr.buyShares;st.log.push(`Bought ${tr.buyShares} shares at ${d2(px)}`)}
@@ -474,7 +496,7 @@ function debrief(st){const sc=st.sc,w=st.w,s0=st.snap0,fitMap=sc.fit(w),strat=st
  const good=score>=70,win=pnl>0;
  const verdict=strat==='skip'?(fit>=.8?'Right to stand aside':'You passed on a good setup'):good&&win?'Good process, good result':good&&!win?'Good process, unlucky result':!good&&win?'Lucky win: the process was weak':'Weak process, and it cost you';
  return{score,read,fit,entry:E,mgmt:M,readRules:R,pnl,win,verdict,strat,best,stockMove:w.c[st.t]/st.startPx-1,days:st.t-T0,parts:{read:read/15,fit,entry:avg(E),mgmt:avg(M)}}}
-g.OG={ACCOUNT,H,F,T0,EXP,STR,SC,rng,bs,generate,build,ivRank,ivPct,ivAt,quote,chain,newRound,equity,netBasis,payoff,makeTrade,snap,entryChecks,openTrade,closeLegs,closeCost,tradePL,alerts,step,debrief,describe,pct,usd,d2};
+g.OG={ACCOUNT,H,F,T0,EXP,STR,SC,rng,bs,generate,build,ivRank,ivPct,ivAt,quote,chain,newRound,equity,netBasis,payoff,makeTrade,snap,entryChecks,cohenChecks,openTrade,closeLegs,closeCost,tradePL,alerts,step,debrief,describe,pct,usd,d2};
 })(typeof window!=='undefined'?window:globalThis);
 /*END CORE*/
 </script>
@@ -543,7 +565,7 @@ function renderBuild(el){const roll=B.roll;
    <canvas id="pay" height="150" aria-label="Payoff at expiry"></canvas>`;
    if(roll){const cc=O.closeCost(st),net=tr.cash-cc;h+=`<div class="alert ${net>=0?'good':'bad'}">Closing the old position costs ${usd(cc)}; the new one brings ${usd(tr.cash)}. Net ${net>=0?'credit':'debit'} for the roll: ${usd(Math.abs(net))}. Adjustment ${st.adj+1} of 2.</div>`}
    if(!tr.afford)h+=`<div class="alert bad">Not enough cash in a $20,000 account for this.${B.strat==='csp'||B.strat==='cc'?' Gavin: under about $20,000, use credit spreads instead of wheeling expensive stocks.':''}</div>`;
-   if(P.coach&&!roll)h+=`<div class="lab" style="margin-top:10px">Coach: live rule check</div>`+checksHtml(O.entryChecks(st,tr))}
+   if(P.coach&&!roll)h+=`<div class="lab" style="margin-top:10px">Coach: Gavin McMaster (scored)</div>`+checksHtml(O.entryChecks(st,tr))+`<div class="lab" style="margin-top:10px">Second opinion: Guy Cohen, Bible of Options Strategies (not scored)</div>`+checksHtml(O.cohenChecks(st,tr))}
   h+=`<div class="row"><button class="btn pri" data-act="place" ${tr.valid&&tr.afford?'':'disabled'}>${roll?'Roll':'Place trade'}</button><button class="btn" data-act="back">${roll?'Cancel':'Back'}</button></div>`}
  else h+=`<div class="row"><button class="btn" data-act="back">Back</button></div>`;
  el.innerHTML=h;drawPay()}
@@ -559,11 +581,12 @@ function renderManage(el){const tr=st.trade,p=O.tradePL(st),eq=O.equity(st),pl=e
   h+=st.shares?`<p class="note">You own the shares. Wheel, phase 2: sell a call above your assigned price, or wait if nothing up there pays.</p><div class="row"><button class="btn pri" data-act="sellcc">Sell a covered call</button><button class="btn" data-act="sellcsp">Sell another put</button></div><div class="row"><button class="btn" data-adv="5">Wait 5 days</button><button class="btn" data-act="finish">Finish round</button></div>`
    :`<p class="note">You are flat.</p><div class="row"><button class="btn pri" data-act="finish">See the debrief</button></div>`}
  h+=`<div class="log">${st.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div>`;el.innerHTML=h}
+function agree(g,c){const n=a=>a.filter(x=>x.ok==='pass').length;return `<p class="note">Gavin passes ${n(g)} of ${g.length} checks; Cohen passes ${n(c)} of ${c.length}. They split mostly on time: Cohen sells one month or less and buys six months or more, Gavin sells 30-45 DTE and avoids the final three weeks.</p>`}
 function renderDebrief(el){const D=st.D,sc=st.sc,bar=(l,v)=>`<div class="bar"><span>${l}</span><div class="trk"><i style="width:${Math.round(v*100)}%"></i></div><b>${Math.round(v*100)}%</b></div>`;
  el.innerHTML=`<div class="step">Debrief</div><div class="score"><div class="big">${D.score}<small>/100</small></div><div><div class="verdict">${D.verdict}</div><div class="note" style="margin:2px 0 0">Process score. Result: <b class="${D.pnl>0?'up':D.pnl<0?'down':''}">${usd(D.pnl)}</b> over ${D.days} trading days; the stock moved ${(D.stockMove*100).toFixed(1)}%.</div></div></div>
  <div class="bars">${bar('Chart read',D.parts.read)}${bar('Strategy fit',D.parts.fit)}${D.strat!=='skip'?bar('Entry rules',D.parts.entry)+bar('Management',D.parts.mgmt):''}</div>
  <div class="reveal"><b>The setup: ${sc.title}</b><p style="margin:4px 0">${sc.lesson}</p><p style="margin:4px 0"><b>Rulebook play.</b> ${sc.ideal}</p></div>
- ${checksHtml(D.readRules)}${D.entry.length?'<div class="lab">Entry</div>'+checksHtml(D.entry):''}${D.mgmt.length?'<div class="lab">Management</div>'+checksHtml(D.mgmt):''}
+ ${checksHtml(D.readRules)}${D.entry.length?'<div class="lab">Entry: Gavin McMaster (scored)</div>'+checksHtml(D.entry):''}${st.entry&&st.entry.cohen?'<div class="lab">Entry: Guy Cohen, second opinion (not scored)</div>'+checksHtml(st.entry.cohen)+agree(D.entry,st.entry.cohen):''}${D.mgmt.length?'<div class="lab">Management</div>'+checksHtml(D.mgmt):''}
  <div class="row"><button class="btn pri" data-act="next">Next round</button><button class="btn" data-act="replay">Replay this chart</button></div>
  <div class="log">${st.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div>`}
 
@@ -592,7 +615,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)r
  else if(a==='back'){if(B&&B.roll){phase='manage'}else if(B&&B.strat&&!B.locked){B.strat=null}else if(B&&B.locked){phase='manage'}else phase='read';if(phase!=='build')B=null}
  else if(a==='skip'){st.entry=null;st.log.push('Stayed in cash');phase='manage';renderAll();advance(30);return}
  else if(a==='place'){const tr=B.tr;if(B.roll){const cc=O.closeLegs(st,'Roll: closed');if(tr.cash-cc<0)st.ev.rollDebit=true;st.adj++;O.openTrade(st,tr,true)}
-  else{if(!st.entry)st.entry={strat:tr.strat,checks:O.entryChecks(st,tr)};O.openTrade(st,tr,false)}B=null;phase='manage'}
+  else{if(!st.entry)st.entry={strat:tr.strat,checks:O.entryChecks(st,tr),cohen:O.cohenChecks(st,tr)};O.openTrade(st,tr,false)}B=null;phase='manage'}
  else if(a==='close'){O.closeLegs(st);if(!st.shares||(st.sc.hold&&!st.ev.assigned))return finish()}
  else if(a==='roll'){const tr=st.trade;B={strat:tr.strat,n:tr.n,leg:'Ks',exp:Math.min(st.w.c.length-2,Math.max(tr.exp,st.t+21)),Ks:tr.Ks,Kl:tr.Kl,roll:true};phase='build'}
  else if(a==='sellcc'||a==='sellcsp'){B={strat:a==='sellcc'?'cc':'csp',n:1,leg:'Ks',exp:Math.min(st.w.c.length-2,st.t+32),locked:true,roll:false};defaults(B.strat);phase='build'}
@@ -613,7 +636,7 @@ function draw(){const cv=$('chart');if(!st||$('tab-play').hidden)return;const w=
  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,Ht);
  const padR=50,padL=4,pw=W-padL-padR,i0=Math.max(t-P.zoom+1,t-251,O.H-252);
  const tr=st.trade||(phase==='build'&&B&&B.tr&&B.tr.valid?B.tr:null),fexp=tr?tr.exp:null;
- const fut=phase==='debrief'?2:Math.min(70,Math.max(8,fexp?fexp-t+2:0)),slots=t-i0+1+fut,bw=pw/slots,X=i=>padL+(i-i0+.5)*bw;
+ const fut=phase==='debrief'?2:Math.min(135,Math.max(8,fexp?fexp-t+2:0)),slots=t-i0+1+fut,bw=pw/slots,X=i=>padL+(i-i0+.5)*bw;
  const hi=hover!=null&&hover>=i0&&hover<=t?hover:t;
  x.font='11px '+css('--mono');x.textBaseline='middle';
  let y0=6;GEO={i0,bw,padL,t,panes:[]};
@@ -706,6 +729,7 @@ $('rules').innerHTML=`
 <div><h3>Credit spreads</h3><ul><li>Short strike 15-30 delta, below support (puts) or above resistance (calls).</li><li>30-45 DTE. No new trades under 21 DTE.</li><li>IV Rank above 50. Do not sell puts below the 200-day just because IV is high.</li><li>Credit at least about 11% of the risk ($50 on $450).</li><li>Take 50% of the credit in under half the time.</li><li>Adjust at the decision point or 25 delta: roll down or out for a credit. Two adjustments, then close.</li><li>Stop at 1.5-2x the credit. Out before expiration week. Never let the short strike go in the money.</li></ul></div>
 <div><h3>Debit spreads</h3><ul><li>Only when IV is low, for a hedge, or in backwardation.</li><li>Buy around 35 delta or closer to the money; 30-60 DTE.</li><li>Risk about half of what you can make. Stop at 50% of the debit.</li></ul></div>
 <div><h3>The wheel</h3><ul><li>Only stocks and ETFs you would hold for years; ETFs preferred. Above the 200-day.</li><li>Put at 25-35 delta, on a down day, 30-45 or 60-120 DTE, about 15% annualised or better.</li><li>One stock no more than about 15% of the account. Under $20,000, prefer credit spreads.</li><li>If assigned, sell calls above your assigned price. Never below cost basis. If nothing pays, wait or sell another put lower.</li><li>Take 50% on short puts. Roll for a credit, down and out, 2-3 rolls at most.</li><li>Reconsider if it breaks the 200-day or falls 20%.</li></ul></div>
+<div><h3>Where Cohen's Bible differs</h3><p>Shown as a second opinion on every trade; not scored.</p><ul><li>Credit spreads and short puts: one month or less to expiry. Gavin: 30-45 DTE and no new trades under 21 DTE.</li><li>Credit spreads: at least a 10% cushion between price and the short strike, and over 10% yield on the width. Gavin uses delta (15-30) instead of a percentage.</li><li>Debit spreads: at least six months to expiry, bought leg at or just out of the money, and out a month before expiry. Gavin: 30-60 DTE.</li><li>Covered calls: one or two strikes out of the money, monthly only. Gavin picks delta by the stock's job.</li><li>Naked puts are high risk; he prefers the bull put spread.</li><li>Liquidity: stock volume over 500,000 a day, open interest at least 100 and ideally 500. The game does not model liquidity.</li><li>Both base stops on the underlying stock, not the option.</li></ul></div>
 <div><h3>Covered calls</h3><ul><li>Decide the stock's job. Income: 25-35 delta. Keep the stock: 15-20 delta. Avoid the 40-delta zone on a keeper.</li><li>IV Rank above 50: go lower in delta. IV Rank near 20: take less, go longer, or skip the cycle.</li><li>30-45 DTE baseline. Check earnings.</li><li>Close at 50-70% of the premium.</li><li>In the money is not an emergency: check time premium, then let the shares go or roll out (or up and out) for a credit.</li></ul></div>`;
 
 /* ---------- boot ---------- */
