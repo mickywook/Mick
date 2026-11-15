@@ -1,0 +1,716 @@
+<title>Premium Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: a trading desk. Chart column on the left carries the evidence; a single step card on the right carries the decision. Stacks on phones. */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --sunk:#e4eae7; --ink:#12201c; --muted:#566660; --line:#cfd8d4;
+  --accent:#0a6b68; --accent-ink:#ffffff; --up:#157a4e; --down:#c93a3a; --warn:#9a6508;
+  --upbg:#dff1e7; --downbg:#f8e1e1; --warnbg:#f6ead0;
+  --ma8:#1baf7a; --ma21:#2a78d6; --ma50:#eb6834; --ma200:#6250d6;
+  --display:"Space Grotesk","IBM Plex Sans",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c1211; --surface:#141c1a; --sunk:#0f1716; --ink:#e4ece9; --muted:#93a59f; --line:#27332f;
+  --accent:#55c8bc; --accent-ink:#06211f; --up:#45c48a; --down:#f07474; --warn:#e2ab45;
+  --upbg:#12301f; --downbg:#3a1a1a; --warnbg:#33290f;
+  --ma8:#199e70; --ma21:#3987e5; --ma50:#d95926; --ma200:#9085e9; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0c1211; --surface:#141c1a; --sunk:#0f1716; --ink:#e4ece9; --muted:#93a59f; --line:#27332f;
+  --accent:#55c8bc; --accent-ink:#06211f; --up:#45c48a; --down:#f07474; --warn:#e2ab45;
+  --upbg:#12301f; --downbg:#3a1a1a; --warnbg:#33290f;
+  --ma8:#199e70; --ma21:#3987e5; --ma50:#d95926; --ma200:#9085e9; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;
+  padding-block:14px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 22px}
+h1{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--body);font-weight:400;font-size:12px;color:var(--muted);letter-spacing:0;margin-top:3px}
+.kpis{display:flex;flex-wrap:wrap;gap:6px 18px;margin-left:auto}
+.kpi{display:flex;flex-direction:column}
+.kpi b{font-family:var(--mono);font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
+.lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tab,.chip,button.btn,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip{padding:3px 8px;font-size:12px;font-family:var(--mono);border-radius:4px}
+.chip[aria-pressed="true"]{background:var(--sunk);border-color:var(--muted)}
+.chip i{display:inline-block;width:9px;height:3px;margin-right:5px;vertical-align:middle}
+button.btn{font-weight:500}
+button.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav .sp{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.desk{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:900px){.desk{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.chartcard{padding:10px 8px 6px}
+.ctl{display:flex;flex-wrap:wrap;gap:5px;padding:0 4px 8px}
+canvas{display:block;width:100%;touch-action:pan-y}
+.brief{display:flex;flex-wrap:wrap;gap:8px 16px;padding:2px 4px 10px;align-items:baseline}
+.brief h2{font-family:var(--display);font-size:18px;margin:0;font-weight:700}
+.brief p{margin:0;color:var(--muted);flex:1 1 260px;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:0 4px 10px}
+.facts div{background:var(--surface);box-shadow:0 0 0 1px var(--line);padding:6px 8px;display:flex;flex-direction:column}
+.facts b{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;font-size:13.5px}
+.up{color:var(--up)} .down{color:var(--down)} .warn{color:var(--warn)}
+h3{font-family:var(--display);font-size:15px;margin:0 0 8px;font-weight:600}
+.step{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:600;margin-bottom:2px}
+.q{margin:10px 0 6px;font-weight:500}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 90px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.strats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px}
+.strat{text-align:left;display:flex;flex-direction:column;gap:2px;padding:8px 10px}
+.strat b{font-weight:600}
+.strat span{font-size:11.5px;color:var(--muted)}
+.strat[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.row label{font-size:12px;color:var(--muted);min-width:74px}
+.row select{flex:1 1 150px;min-width:0;font-family:var(--mono);font-size:12.5px}
+.stp{display:flex;gap:4px}
+.stp button{width:32px;padding:6px 0;text-align:center}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:10px 0}
+.metrics div{background:var(--surface);box-shadow:0 0 0 1px var(--line);padding:6px 8px;display:flex;flex-direction:column}
+.metrics b{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+ul.checks{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:4px}
+ul.checks li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:8px;align-items:start;font-size:12.5px;padding:5px 7px;border-radius:5px;background:var(--sunk)}
+.tag{font-family:var(--mono);font-size:10.5px;font-weight:600;text-align:center;border-radius:3px;padding:1px 0;margin-top:1px}
+.tag.pass{background:var(--upbg);color:var(--up)} .tag.fail{background:var(--downbg);color:var(--down)} .tag.warn{background:var(--warnbg);color:var(--warn)}
+ul.checks li b{font-weight:600}
+ul.checks li span{color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);margin:6px 0}
+.alert{border-left:3px solid var(--warn);background:var(--warnbg);padding:6px 9px;border-radius:0 5px 5px 0;font-size:12.5px;margin:5px 0}
+.alert.good{border-color:var(--up);background:var(--upbg)} .alert.bad{border-color:var(--down);background:var(--downbg)}
+.log{font-family:var(--mono);font-size:11.5px;color:var(--muted);max-height:120px;overflow:auto;border-top:1px solid var(--line);margin-top:10px;padding-top:6px}
+.log div{padding:1px 0}
+.score{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:8px}
+.score .big{font-family:var(--display);font-size:44px;font-weight:700;line-height:1}
+.score .big small{font-size:16px;color:var(--muted);font-weight:500}
+.verdict{font-family:var(--display);font-weight:600;font-size:16px}
+.bars{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+.bar{display:grid;grid-template-columns:86px minmax(0,1fr) 52px;gap:8px;align-items:center;font-size:12px}
+.bar i{display:block;height:8px;border-radius:0 4px 4px 0;background:var(--accent)}
+.bar .trk{background:var(--sunk);border-radius:0 4px 4px 0}
+.bar b{font-family:var(--mono);font-weight:500;text-align:right}
+.reveal{background:var(--sunk);border-radius:6px;padding:9px 11px;margin:8px 0}
+.reveal b{font-family:var(--display)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.rules ul{margin:0;padding-left:18px} .rules li{margin:3px 0}
+.rules p{margin:0 0 6px;color:var(--muted)}
+footer{color:var(--muted);font-size:11.5px;max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Premium Desk<small>Options drills on a $20,000 paper account, graded against your Gavin McMaster rulebook</small></h1>
+    <div class="kpis" id="kpis"></div>
+  </header>
+  <nav>
+    <button class="tab" data-tab="play" aria-selected="true">Trade</button>
+    <button class="tab" data-tab="stats" aria-selected="false">Journal</button>
+    <button class="tab" data-tab="rules" aria-selected="false">Rulebook</button>
+    <div class="sp">
+      <label class="lab" for="focus">Focus</label>
+      <select id="focus">
+        <option value="all">All setups</option><option value="credit">Credit spreads</option><option value="debit">Debit spreads</option>
+        <option value="wheel">The wheel</option><option value="cc">Covered calls</option><option value="event">Earnings and vol shocks</option>
+      </select>
+      <button class="chip" id="coach" aria-pressed="true" title="Show live rule checks while you build a trade">Coach on</button>
+    </div>
+  </nav>
+
+  <section id="tab-play" class="desk">
+    <div class="card chartcard">
+      <div class="brief" id="brief"></div>
+      <div class="facts" id="facts"></div>
+      <div class="ctl" id="ctl"></div>
+      <canvas id="chart" aria-label="Price chart with moving averages, volume, RSI, accumulation/distribution line and implied volatility"></canvas>
+    </div>
+    <div class="card" id="panel"></div>
+  </section>
+  <section id="tab-stats" hidden><div class="card" id="stats"></div></section>
+  <section id="tab-rules" hidden><div class="card"><div class="rules" id="rules"></div></div></section>
+  <footer>Prices, volumes and volatility are simulated; option values use Black-Scholes with a put skew and fills at mid less 2 cents a leg. The rules are a teaching summary of Gavin McMaster's published methods, cross-checked with Guy Cohen and Lawrence McMillan. A practice tool, not investment advice.</footer>
+</div>
+
+<script>
+/*CORE*/
+(function(g){
+const ACCOUNT=20000,H=460,F=150,T0=H-1;
+const EXP=[{td:5,d:7},{td:15,d:21},{td:21,d:30},{td:32,d:45},{td:43,d:60},{td:64,d:90}];
+const STR={
+ bps:{name:'Bull put spread',kind:'credit',type:'P',hint:'Credit. Mildly bullish. Wants IV high.'},
+ bcs:{name:'Bear call spread',kind:'credit',type:'C',hint:'Credit. Mildly bearish. Wants IV high.'},
+ bcd:{name:'Bull call spread',kind:'debit',type:'C',hint:'Debit. Very bullish. Wants IV low.'},
+ bpd:{name:'Bear put spread',kind:'debit',type:'P',hint:'Debit. Bearish. Wants IV low.'},
+ csp:{name:'Cash-secured put',kind:'credit',type:'P',hint:'Wheel, phase 1. Happy to own it.'},
+ cc:{name:'Covered call',kind:'credit',type:'C',hint:'Against 100 shares. Income or exit.'},
+ skip:{name:'No trade',kind:'none',hint:'Cash is a position.'}
+};
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function ncdf(x){const t=1/(1+0.2316419*Math.abs(x)),d=0.3989423*Math.exp(-x*x/2);
+ const p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));return x>0?1-p:p}
+function bs(S,K,T,v,type){
+ if(T<=0){const i=type==='C'?Math.max(0,S-K):Math.max(0,K-S);return{p:i,d:type==='C'?(S>K?1:0):(S<K?-1:0)}}
+ const r=0.04,sq=v*Math.sqrt(T),d1=(Math.log(S/K)+(r+v*v/2)*T)/sq,d2=d1-sq;
+ if(type==='C')return{p:S*ncdf(d1)-K*Math.exp(-r*T)*ncdf(d2),d:ncdf(d1)};
+ return{p:K*Math.exp(-r*T)*ncdf(-d2)-S*ncdf(-d1),d:ncdf(d1)-1}}
+const S=(n,drift,vol,o)=>Object.assign({n,drift,vol,acc:0,ivm:vol*1.15,mr:0},o||{});
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+
+/* ---------- scenarios ---------- */
+const A=(w)=>({px:w.c[T0],m8:w.ma[8][T0],m21:w.ma[21][T0],m50:w.ma[50][T0],m200:w.ma[200][T0],ivr:ivRank(w,T0)});
+function rangePos(w,n){let lo=1e9,hi=0;for(let i=T0-n;i<=T0;i++){lo=Math.min(lo,w.bars[i].l);hi=Math.max(hi,w.bars[i].h)}return(w.c[T0]-lo)/(hi-lo)}
+const SC=[
+{id:'pullback',title:'Uptrend pullback into support',focus:['credit'],kind:'Large-cap stock',px:[110,260],
+ hist:()=>[S(null,.32,.2,{acc:.3}),S(9,-1.6,.26,{acc:-.2,ivm:.42})],
+ fut:[[.65,[S(null,.35,.2)]],[.2,[S(null,0,.22,{mr:.05})]],[.15,[S(25,-1.8,.35),S(null,-.1,.3)]]],
+ check:w=>{const a=A(w);return a.px>a.m200*1.02&&a.ivr>=52},trend:['bull'],
+ fit:()=>({bps:1,csp:.5,bcd:.5,skip:.3,cc:.2}),
+ lesson:'A rising stock that dips a few percent on a volatility pop, still above its 200-day. This is the textbook bull put spread: you are paid for fear while the trend is on your side.',
+ ideal:'Bull put spread, short strike 15-30 delta below the recent low, $5 wide, 30-45 DTE, risk under 5% of the account. Take 50% of the credit and move on.'},
+{id:'range_sup',title:'Range-bound at the floor, premium rich',focus:['credit'],kind:'Large-cap stock',px:[90,220],
+ hist:()=>[S(null,.4,.2,{ivm:.22}),S(110,0,.2,{mr:.08,ivm:.29}),S(6,-1,.25,{ivm:.42})],
+ fut:[[.6,[S(null,0,.2,{mr:.07,anchor:'mean'})]],[.2,[S(null,.4,.22)]],[.2,[S(30,-1.2,.32),S(null,0,.28)]]],
+ check:w=>{const a=A(w);return rangePos(w,100)<=.3&&a.px>a.m200&&a.ivr>=48},trend:['neutral','bull'],
+ fit:()=>({bps:1,bcs:.5,csp:.5,bcd:.4,skip:.3}),
+ lesson:'Months of sideways trade with clear support, price sitting near the bottom of the range and IV Rank elevated. Selling puts below a floor that has held is the higher-probability side.',
+ ideal:'Bull put spread with the short strike below the range low. A bear call spread above the range top also fits; that pair is an iron condor.'},
+{id:'range_res',title:'Range-bound at the ceiling, premium rich',focus:['credit'],kind:'Large-cap stock',px:[90,220],
+ hist:()=>[S(null,.4,.2,{ivm:.21}),S(110,0,.2,{mr:.08,ivm:.3}),S(6,1,.2,{ivm:.36})],
+ fut:[[.6,[S(null,0,.2,{mr:.07,anchor:'mean'})]],[.2,[S(null,.45,.22)]],[.2,[S(30,-1,.3),S(null,0,.26)]]],
+ check:w=>{const a=A(w);return rangePos(w,100)>=.72&&a.ivr>=45},trend:['neutral','bear'],
+ fit:()=>({bcs:1,bps:.5,bpd:.5,skip:.4,csp:.3}),
+ lesson:'Same range, but price is pressed against resistance. The mildly bearish credit trade, a bear call spread above the ceiling, is the one with room to be wrong.',
+ ideal:'Bear call spread, short call 15-30 delta above the range high, 30-45 DTE. Watch for a breakout: the risk is a squeeze higher.'},
+{id:'knife',title:'Falling knife with juicy premium',focus:['credit','debit'],kind:'Large-cap stock',px:[60,180],
+ hist:()=>[S(null,.15,.22),S(90,-.55,.34,{acc:-.4,ivm:.5}),S(8,-1.5,.45,{ivm:.68})],
+ fut:[[.5,[S(null,-.5,.38)]],[.25,[S(null,0,.32,{mr:.04})]],[.25,[S(15,2,.4),S(null,-.2,.3)]]],
+ check:w=>{const a=A(w);return a.px<a.m200*.94&&a.ivr>=55},trend:['bear'],
+ fit:()=>({bcs:1,skip:.8,bpd:.7}),
+ lesson:'IV Rank is screaming "sell premium", but the stock is far below a falling 200-day with distribution on the A/D line. Gavin: do not sell puts below the 200-day just because IV is high.',
+ ideal:'Bear call spread above resistance, or stand aside. Selling puts or wheeling this is catching a knife.'},
+{id:'grind',title:'Slow grind lower, options cheap',focus:['debit'],kind:'Large-cap stock',px:[70,200],
+ hist:()=>[S(null,.2,.3,{ivm:.4}),S(100,-.35,.15,{acc:-.4,ivm:.17})],
+ fut:[[.6,[S(null,-.4,.2)]],[.2,[S(null,0,.16,{mr:.05})]],[.2,[S(null,.35,.18)]]],
+ check:w=>{const a=A(w);return a.px<a.m50&&a.px<a.m200&&a.ivr<=28},trend:['bear'],
+ fit:()=>({bpd:1,skip:.6,bcs:.5}),
+ lesson:'A quiet, orderly downtrend with IV near its 12-month low. There is little premium to sell, so the bear call spread pays poorly. This is one of the few spots where Gavin buys a bear put spread.',
+ ideal:'Bear put (debit) spread: buy the put near 35 delta or closer, 45-60 DTE for time to be right, stop at about half the debit.'},
+{id:'breakout',title:'Breakout from a base on accumulation',focus:['debit'],kind:'Large-cap stock',px:[80,240],
+ hist:()=>[S(null,.25,.3,{ivm:.38}),S(90,0,.14,{mr:.08,acc:.5,ivm:.17}),S(4,3,.16,{acc:.6,ivm:.19})],
+ fut:[[.65,[S(null,.5,.2)]],[.2,[S(12,-1.2,.22),S(null,0,.18,{mr:.05})]],[.15,[S(null,.05,.18)]]],
+ check:w=>{const a=A(w);let hi=0;for(let i=T0-90;i<T0-5;i++)hi=Math.max(hi,w.bars[i].h);return a.px>hi&&a.ivr<=35&&a.px>a.m200},trend:['bull'],
+ fit:()=>({bcd:1,bps:.6,csp:.4,skip:.3}),
+ lesson:'A tight base, a rising A/D line through the base (accumulation), then a break to new highs while IV is low. Very bullish with cheap options is the bull call spread case.',
+ ideal:'Bull call (debit) spread, long call near the money, 45-60 DTE, reward at least equal to risk. A bull put spread works but the credit is thin at this IV.'},
+{id:'earn_soon',title:'Earnings next week, IV pumped',focus:['event','credit'],kind:'Large-cap stock',px:[90,240],earn:[5,8],
+ hist:()=>[S(null,.3,.25)],
+ fut:[[.5,[S(null,.2,.24)]],[.5,[S(null,-.1,.28)]]],
+ check:w=>{const a=A(w);return a.px>a.m200&&a.ivr>=55},trend:['bull','neutral'],
+ fit:()=>({skip:1,bps:.5,bcs:.4,bcd:.3,bpd:.3,csp:.2}),
+ lesson:'IV Rank is high only because earnings are days away. A 10-delta put can be 20% in the money after a gap. Gavin avoids premium selling through earnings; if you must, defined risk and tiny size (1-2% of the account).',
+ ideal:'No trade until after the report. Then sell puts into the post-earnings drop if the stock is still above its 200-day.'},
+{id:'pullback_earn',title:'Good pullback, but earnings inside 45 days',focus:['event','credit'],kind:'Large-cap stock',px:[110,260],earn:[25,30],
+ hist:()=>[S(null,.32,.2,{acc:.3}),S(9,-1.6,.26,{acc:-.2,ivm:.42})],
+ fut:[[.6,[S(null,.3,.2)]],[.4,[S(null,-.1,.26)]]],
+ check:w=>{const a=A(w);return a.px>a.m200*1.02&&a.ivr>=52},trend:['bull'],
+ fit:()=>({bps:1,csp:.5,bcd:.5,skip:.3}),
+ lesson:'The chart says bull put spread, but the usual 45 DTE expiry would carry the trade through earnings. Always check the next earnings date before entering.',
+ ideal:'Bull put spread using the 30 DTE expiry that ends before the report, or plan to close the day before earnings.'},
+{id:'dtop',title:'Second peak on weaker A/D and RSI',focus:['credit','debit'],kind:'Large-cap stock',px:[90,240],
+ hist:()=>[S(null,.3,.22,{acc:.3}),S(30,.9,.22,{acc:.3}),S(14,-1.3,.26),S(22,.85,.16,{acc:-.7,ivm:.3})],
+ fut:[[.55,[S(30,-1,.3),S(null,-.2,.28)]],[.25,[S(null,0,.2,{mr:.05})]],[.2,[S(null,.5,.2)]]],
+ check:w=>{const a=A(w);let hi=0,k=0;for(let i=T0-60;i<=T0-25;i++)if(w.bars[i].h>hi){hi=w.bars[i].h;k=i}
+  return Math.abs(a.px/hi-1)<.03&&w.ad[T0]<w.ad[k]&&w.rsi[T0]<w.rsi[k]-4&&a.px>a.m200},trend:['bear','neutral'],
+ fit:w=>ivRank(w,T0)>=40?{bcs:1,bpd:.7,skip:.6,bps:.2}:{bpd:1,bcs:.6,skip:.6,bps:.2},
+ lesson:'Price is back at the old high, but RSI made a lower high and the A/D line is falling: volume is leaving on the way up. That is distribution at resistance, a bearish divergence.',
+ ideal:'Bear call spread above the double top if IV Rank is decent; a bear put spread if premium is thin. At minimum, do not open new bullish trades here.'},
+{id:'panic',title:'Market panic, VIX in backwardation',focus:['event','debit'],kind:'Large-cap stock',px:[90,240],market:'back',
+ hist:()=>[S(null,.25,.2),S(9,-4.5,.6,{ivm:.85,acc:-.5})],
+ fut:[[.45,[S(20,-2.5,.7),S(null,.3,.4)]],[.35,[S(20,3,.5),S(null,.3,.25)]],[.2,[S(null,0,.45,{mr:.03})]]],
+ check:w=>A(w).ivr>=85,trend:['bear','neutral'],
+ fit:()=>({skip:1,bpd:.7,bcs:.5,bps:.15,csp:.15,bcd:.1}),
+ lesson:'IV Rank near 100 looks like a gift, but the VIX term structure is in backwardation. That is Gavin\'s high-risk flag: stop adding premium selling, keep size small, and remember cash is a position.',
+ ideal:'No new premium selling. If you must act, a small debit spread loses less when you are wrong. Sell puts only after the term structure returns to contango.'},
+{id:'wheel_etf',title:'An ETF you would own, on sale',focus:['wheel'],kind:'Sector ETF, pays a dividend',px:[17,28],
+ hist:()=>[S(null,.22,.16,{ivm:.2}),S(18,-.9,.22,{ivm:.31})],
+ fut:[[.5,[S(null,.2,.17)]],[.25,[S(null,0,.18,{mr:.05})]],[.25,[S(40,-.8,.3),S(null,.25,.22)]]],
+ check:w=>{const a=A(w);return a.px>a.m200&&a.ivr>=40},trend:['bull','neutral'],
+ fit:()=>({csp:1,bps:.7,cc:.5,bcd:.4,skip:.3}),
+ lesson:'Quality ETF (no earnings or bankruptcy risk), beaten down lately but still above the 200-day, IV elevated. This is where the wheel starts: get paid to place a limit order.',
+ ideal:'Cash-secured put, 25-35 delta, on a down day, 30-90 DTE, at least 15% annualised. If assigned, sell calls above your assigned price.'},
+{id:'wheel_assigned',title:'Assigned and under water',focus:['wheel'],kind:'Sector ETF, pays a dividend',px:[17,28],hold:{basis:[1.07,1.1]},
+ hist:()=>[S(null,.15,.17),S(30,-.9,.24,{ivm:.32}),S(6,.6,.2)],
+ fut:[[.5,[S(null,.35,.18)]],[.3,[S(null,0,.2,{mr:.05})]],[.2,[S(30,-.7,.3),S(null,.2,.22)]]],
+ check:w=>A(w).ivr>=35,trend:null,
+ fit:()=>({cc:1,csp:.9,skip:.8,bps:.5,bcd:.2,bcs:.2,bpd:.2}),
+ lesson:'You were put the shares and the stock is below your cost. The number-one wheel mistake is selling a call below your cost basis and locking in the loss when it bounces.',
+ ideal:'Sell a call only at or above your assigned price, even if the premium is small. If nothing up there pays, wait, or sell another put lower and average in.'},
+{id:'wheel_junk',title:'High premium, low quality',focus:['wheel'],kind:'Unprofitable small-cap',px:[12,25],junk:true,
+ hist:()=>[S(null,.5,.6),S(120,-.9,.75,{acc:-.4,ivm:.95})],
+ fut:[[.5,[S(null,-.9,.8)]],[.25,[S(null,0,.7,{mr:.03})]],[.25,[S(20,4,.9),S(null,-.5,.7)]]],
+ check:w=>{const a=A(w);return a.px<a.m200*.9},trend:['bear'],
+ fit:()=>({skip:1,bcs:.6,bpd:.6}),
+ lesson:'The put pays an enormous annualised return, and that is the trap. Wheel mistake number one is picking stocks for premium instead of quality. Do not wheel something you would not hold through a 60% drop.',
+ ideal:'No wheel here. If you want exposure, a defined-risk bearish spread respects the downtrend.'},
+{id:'cc_income',title:'Income shares, premium decent',focus:['cc'],kind:'Dividend large-cap',px:[35,70],hold:{basis:[.86,.93],job:'income'},
+ hist:()=>[S(null,.18,.2,{ivm:.24}),S(40,.1,.22,{ivm:.34})],
+ fut:[[.4,[S(null,.25,.2)]],[.4,[S(null,0,.2,{mr:.05})]],[.2,[S(null,-.3,.26)]]],
+ check:w=>{const a=A(w);return a.px>a.m200&&a.ivr>=45},trend:['bull','neutral'],
+ fit:()=>({cc:1,skip:.3,csp:.4,bps:.3}),
+ lesson:'The shares are there to produce cash flow and being called away is fine. With IV Rank above 50, Gavin drops the delta a little (30 becomes 20-25) to leave room for the stock.',
+ ideal:'Covered call, 25-35 delta (20-25 with IV this high), 30-45 DTE. Close at 50-70% of the premium rather than holding to expiry.'},
+{id:'cc_keep',title:'A runner you want to keep, IV on the floor',focus:['cc'],kind:'Growth large-cap',px:[40,80],hold:{basis:[.7,.8],job:'keep'},
+ hist:()=>[S(null,.2,.28,{ivm:.36}),S(70,.7,.14,{acc:.5,ivm:.16})],
+ fut:[[.6,[S(null,.6,.18)]],[.25,[S(null,.05,.16)]],[.15,[S(null,-.3,.24)]]],
+ check:w=>A(w).ivr<=30,trend:['bull'],
+ fit:()=>({skip:1,cc:.8,bcd:.3,bps:.3}),
+ lesson:'Strong trend, accumulation, and thin premium. Gavin: do not fix thin premium by selling closer to the money. There is no rule that you must be in a covered call every month, especially in a rally.',
+ ideal:'Skip this cycle, or sell a 15-20 delta call and accept the small premium. A 40-delta call on a stock you want to keep is the classic mistake.'},
+{id:'cc_earn',title:'Income shares with earnings two weeks out',focus:['cc','event'],kind:'Dividend large-cap',px:[35,70],hold:{basis:[.86,.93],job:'income'},earn:[9,13],
+ hist:()=>[S(null,.2,.22,{ivm:.26})],
+ fut:[[.5,[S(null,.2,.2)]],[.5,[S(null,-.1,.24)]]],
+ check:w=>{const a=A(w);return a.px>a.m200&&a.ivr>=45},trend:['bull','neutral'],
+ fit:()=>({skip:1,cc:.8,csp:.2,bps:.3}),
+ lesson:'The premium looks great because earnings sit inside the next expiry. A gap up caps you; a gap down is all yours.',
+ ideal:'Wait until after the report, or use the short expiry that ends before it, or go much further out of the money (under 20 delta).'}
+];
+
+/* ---------- world generation ---------- */
+function expand(segs,N){const fixed=segs.reduce((a,s)=>a+(s.n||0),0);const out=[];segs.forEach((s,si)=>{const n=s.n==null?Math.max(1,N-fixed):s.n;for(let i=0;i<n;i++)out.push({s,si,first:i===0})});
+ while(out.length<N)out.push({s:segs[segs.length-1],si:segs.length-1,first:false});return out.slice(0,N)}
+function build(sc,seed){
+ const R=rng(seed),U=(a,b)=>a+(b-a)*R();
+ const gs=()=>{let u=0;while(!u)u=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R())};
+ const hist=expand(sc.hist(U),H);let fr=R(),ac=0,fb=sc.fut[sc.fut.length-1][1];
+ for(const b of sc.fut){ac+=b[0];if(fr<=ac){fb=b[1];break}}
+ const par=hist.concat(expand(fb.map(x=>Object.assign({},x)),F));
+ const earn=sc.earn?T0+Math.round(U(sc.earn[0],sc.earn[1])):null,eRet=(R()<.52?1:-1)*(.04+Math.abs(gs())*.045);
+ const bars=[],c=[],iv=[];let px=100,lc=0,lnIv=Math.log(par[0].s.ivm),anchor=100;
+ for(let i=0;i<H+F;i++){const p=par[i].s;
+  if(par[i].first&&p.mr){if(p.anchor==='mean'){let m=0,k=0;for(let j=Math.max(0,i-100);j<i;j++){m+=c[j];k++}anchor=k?m/k:px}else anchor=px}
+  lc=.9*lc+.12*gs();const dv=p.vol/Math.sqrt(252)*Math.exp(lc);
+  let ret=p.drift/252+dv*gs()+(p.mr?p.mr*Math.log(anchor/px):0);const base=ret;
+  const isE=i===earn;if(isE)ret+=eRet;
+  const prev=px,o=prev*Math.exp(isE?eRet*.9:.3*dv*gs());px=prev*Math.exp(ret);
+  const hi=Math.max(o,px)*(1+Math.abs(gs())*dv*.45*(1-.6*p.acc)),lo=Math.min(o,px)*(1-Math.abs(gs())*dv*.45*(1+.6*p.acc));
+  let v=1e6*Math.exp(.35*gs())*(1+.45*Math.abs(ret)/(p.vol/Math.sqrt(252)));v*=ret>0?1+.5*p.acc:1-.5*p.acc;if(isE)v*=3;
+  const gap=Math.log(p.ivm)-lnIv;lnIv+=(gap>0?.16:.05)*gap-2.5*base+.025*gs();if(isE)lnIv-=.06;lnIv=clamp(lnIv,Math.log(.09),Math.log(1.6));
+  bars.push({o,h:hi,l:lo,c:px,v});c.push(px);iv.push(Math.exp(lnIv))}
+ const f=U(sc.px[0],sc.px[1])/c[T0],r2=x=>Math.round(x*f*100)/100;
+ bars.forEach((b,i)=>{b.o=r2(b.o);b.h=r2(b.h);b.l=r2(b.l);b.c=r2(b.c);b.h=Math.max(b.h,b.o,b.c);b.l=Math.min(b.l,b.o,b.c);c[i]=b.c});
+ const w={bars,c,iv,earn,seed,sc:sc.id,market:sc.market||'contango'};const p0=c[T0];
+ w.step=p0<30?.5:p0<75?1:p0<160?2.5:5;
+ w.ma={};[8,21,50,200].forEach(n=>{const a=[];let s=0;for(let i=0;i<c.length;i++){s+=c[i];if(i>=n)s-=c[i-n];a.push(i>=n-1?s/n:null)}w.ma[n]=a});
+ w.rsi=[];let ag=0,al=0;for(let i=0;i<c.length;i++){if(!i){w.rsi.push(50);continue}const d=c[i]-c[i-1],up=Math.max(d,0),dn=Math.max(-d,0);
+  if(i<=14){ag+=up/14;al+=dn/14}else{ag=(ag*13+up)/14;al=(al*13+dn)/14}w.rsi.push(al===0?100:100-100/(1+ag/al))}
+ w.ad=[];let a=0;bars.forEach(b=>{a+=b.h>b.l?((b.c-b.l)-(b.h-b.c))/(b.h-b.l)*b.v:0;w.ad.push(a)});
+ w.vma=[];let vs=0;bars.forEach((b,i)=>{vs+=b.v;if(i>=20)vs-=bars[i-20].v;w.vma.push(vs/Math.min(i+1,20))});
+ w.ivd=iv.map((x,i)=>x*(earn!=null&&i<earn?1+.3*clamp((30-(earn-i))/20,0,1):1));
+ return w}
+function generate(sc,seed){let w;for(let k=0;k<120;k++){w=build(sc,seed+k*7919);if(!sc.check||sc.check(w))break}return w}
+function ivRank(w,t){let lo=9,hi=0;for(let i=t-251;i<=t;i++){lo=Math.min(lo,w.ivd[i]);hi=Math.max(hi,w.ivd[i])}return hi>lo?100*(w.ivd[t]-lo)/(hi-lo):50}
+function ivPct(w,t){let k=0;for(let i=t-251;i<t;i++)if(w.ivd[i]<w.ivd[t])k++;return 100*k/251}
+function ivAt(w,t,exp){return w.iv[t]*(w.earn!=null&&t<w.earn&&exp>=w.earn?1+.5*Math.min(1,12/Math.max(1,exp-t)):1)}
+function quote(w,t,type,K,exp){const Sx=w.c[t],v=ivAt(w,t,exp)*clamp(1+.7*Math.log(Sx/K),.8,1.6);return bs(Sx,K,(exp-t)/252,v,type)}
+function chain(w,t,type,exp){const Sx=w.c[t],st=w.step,atm=Math.round(Sx/st)*st,out=[];
+ for(let k=-22;k<=22;k++){const K=+(atm+k*st).toFixed(2);if(K<=0)continue;const q=quote(w,t,type,K,exp),ad=Math.abs(q.d);if(ad<.03||ad>.8||q.p<.03)continue;out.push({K,p:q.p,d:q.d})}
+ return out}
+
+/* ---------- round state and trades ---------- */
+function newRound(sc,seed){const w=generate(sc,seed),px=w.c[T0];
+ const st={sc,w,t:T0,cash:ACCOUNT,shares:0,gross:0,prem:0,legs:[],trade:null,adj:0,ev:{},log:[],read:{},entry:null,done:false,T0};
+ if(sc.hold){const R=rng(seed+5),b=sc.hold.basis;st.shares=100;st.gross=Math.round(px*(b[0]+(b[1]-b[0])*R())*100)/100;st.prem=st.gross*100*.025;st.cash=ACCOUNT-100*px;st.job=sc.hold.job||null}
+ st.startEq=equity(st);st.startPx=px;return st}
+function legVal(st,l){return quote(st.w,st.t,l.type,l.K,l.exp).p}
+function equity(st){return st.cash+st.shares*st.w.c[st.t]+st.legs.reduce((a,l)=>a+l.qty*100*legVal(st,l),0)}
+function netBasis(st){return st.shares?st.gross-st.prem/st.shares:0}
+function payoff(tr,Sx,st){let v=0;tr.legs.forEach(l=>{const i=l.type==='C'?Math.max(0,Sx-l.K):Math.max(0,l.K-Sx);v+=l.qty*100*(i-l.price)});
+ if(tr.strat==='cc')v+=100*tr.n*(Sx-st.w.c[st.t]);return v}
+function makeTrade(st,strat,exp,Ks,Kl,n){const w=st.w,t=st.t,m=STR[strat],legs=[];
+ const mk=(K,qty)=>{const q=quote(w,t,m.type,K,exp);legs.push({type:m.type,K,qty,exp,delta:q.d,price:Math.max(.01,q.p+(qty>0?.02:-.02))})};
+ mk(Ks,-n);if(strat!=='csp'&&strat!=='cc')mk(Kl,n);
+ const tr={strat,exp,legs,n,Ks,Kl,td:exp-t,dte:Math.round((exp-t)*7/5),sd:Math.abs(legs[0].delta)};
+ tr.credit=legs.reduce((a,l)=>a-Math.sign(l.qty)*l.price,0);tr.cash=tr.credit*100*n;
+ const buy=strat==='cc'&&st.shares<100*n?100*n-st.shares:0;tr.buyShares=buy;
+ const Sx=w.c[t];
+ if(strat==='csp'){tr.maxP=tr.cash;tr.maxL=(Ks-tr.credit)*100*n;tr.be=[Ks-tr.credit];tr.capital=tr.maxL;tr.ann=tr.credit/(Ks-tr.credit)*365/tr.dte}
+ else if(strat==='cc'){tr.maxP=(Ks-Sx+tr.credit)*100*n;tr.maxL=(Sx-tr.credit)*100*n;tr.be=[Sx-tr.credit];tr.capital=buy*Sx;tr.ann=tr.credit/Sx*365/tr.dte;tr.called=(Ks-Sx+tr.credit)/Sx}
+ else{const wd=Math.abs(Ks-Kl);tr.width=wd;tr.ld=Math.abs(legs[1].delta);
+  if(m.kind==='credit'){tr.maxP=tr.cash;tr.maxL=(wd-tr.credit)*100*n;tr.be=[strat==='bps'?Ks-tr.credit:Ks+tr.credit]}
+  else{tr.maxL=-tr.cash;tr.maxP=(wd+tr.credit)*100*n;tr.be=[strat==='bcd'?Kl-tr.credit:Kl+tr.credit]}}
+ tr.ror=tr.maxL>0?tr.maxP/tr.maxL:0;
+ const T=(exp-t)/252,v=ivAt(w,t,exp),z=(Math.log(tr.be[0]/Sx)+v*v/2*T)/(v*Math.sqrt(T));
+ tr.pop=(strat==='bps'||strat==='csp'||strat==='cc'||strat==='bcd')?1-ncdf(z):ncdf(z);
+ tr.valid=strat==='csp'||strat==='cc'?true:(strat==='bps'||strat==='bcd'?Kl<Ks:Kl>Ks);
+ if(strat==='bcd'||strat==='bpd')tr.valid=strat==='bcd'?Kl<Ks:Kl>Ks;
+ tr.afford=strat==='csp'?Ks*100*n<=st.cash+tr.cash:strat==='cc'?buy*Sx<=st.cash:tr.maxL<=st.cash;
+ return tr}
+function snap(st){const w=st.w,t=st.t,px=w.c[t];let lo=1e9,hi=0;for(let i=t-40;i<t;i++){lo=Math.min(lo,w.bars[i].l);hi=Math.max(hi,w.bars[i].h)}
+ return{px,m8:w.ma[8][t],m21:w.ma[21][t],m50:w.ma[50][t],m200:w.ma[200][t],rsi:w.rsi[t],ivr:ivRank(w,t),ivp:ivPct(w,t),iv:w.ivd[t],sup:lo,res:hi,
+  em:px*w.ivd[t]*Math.sqrt(21/252),m200up:w.ma[200][t]>w.ma[200][t-20],earnIn:w.earn!=null&&w.earn>t?w.earn-t:null}}
+const pct=x=>(x*100).toFixed(0)+'%',usd=x=>(x<0?'-$':'$')+Math.abs(Math.round(x)).toLocaleString('en-US'),d2=x=>x.toFixed(2);
+function entryChecks(st,tr){const s=snap(st),sc=st.sc,m=STR[tr.strat],C=[],add=(ok,label,msg)=>C.push({ok,label,msg});
+ const dl=Math.round(tr.sd*100),sell=m.kind==='credit',spread=tr.strat==='bps'||tr.strat==='bcs';
+ if(tr.strat==='csp'){const f=tr.capital/ACCOUNT;add(f<=.15?'pass':f<=.25?'warn':'fail','Position size',`Ties up ${usd(tr.capital)}, ${pct(f)} of the account. Gavin keeps one wheel stock to about 15%, and you must be able to afford the shares.`)}
+ else if(tr.strat==='cc'){if(tr.buyShares){const f=tr.capital/ACCOUNT;add(f<=.15?'pass':f<=.3?'warn':'fail','Position size',`Buying ${tr.buyShares} shares costs ${usd(tr.capital)}, ${pct(f)} of the account.`)}}
+ else{const f=tr.maxL/ACCOUNT;add(f<=.05?'pass':f<=.07?'warn':'fail','Position size',`Max loss ${usd(tr.maxL)} is ${(f*100).toFixed(1)}% of the account. Rule: never more than 5% on one trade; about 3% is his comfortable middle.`)}
+ if(sell&&st.w.market==='back')add('fail','Market gate','VIX term structure is in backwardation. Rule: stop adding premium-selling trades; consider debit spreads or cash.');
+ if(s.earnIn!=null&&st.w.earn<=tr.exp){
+  if(sell){const small=spread&&tr.maxL/ACCOUNT<=.02,far=tr.strat==='cc'&&tr.sd<=.2;add(small||far?'warn':'fail','Earnings',`Earnings land in ${s.earnIn} trading days, before this expiry. Rule: avoid earnings with premium-selling trades, or pick an expiry that ends first.${small?' Defined risk at under 2% of the account is the only exception he allows.':''}`)}
+  else add('warn','Earnings',`Earnings fall before expiry. A debit spread bought at pumped IV loses value in the IV crush even if you are right on direction.`)}
+ else if(sell&&s.earnIn!=null)add('pass','Earnings','This expiry ends before the earnings report.');
+ if(spread){
+  add(dl>=15&&dl<=30?'pass':dl>=10&&dl<15?(s.ivr>=60?'pass':'warn'):dl<=35&&dl>30?'warn':'fail','Short strike delta',`${dl} delta. Rule: 15-30 delta (15 is conservative, 30 more directional); 10-15 only when IV is high.`);
+  add(tr.td===21||tr.td===32?'pass':tr.td===43?'pass':tr.td===64?'warn':tr.td===15?'warn':'fail','Days to expiry',`${tr.dte} DTE. Sweet spot is 30-45 DTE; no new credit spreads under 21 DTE because gamma takes over.`);
+  add(s.ivr>=50?'pass':s.ivr>=30?'warn':'fail','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. Rule: sell credit spreads with IV Rank above 50; at low IV they lose their edge.`);
+  add(tr.ror>=.1&&tr.credit<tr.width*.5?'pass':tr.ror<.1?'fail':'warn','Credit vs risk',`Credit is ${pct(tr.ror)} of the risk. Gavin and Cohen both want at least about 11% (${'$'}50 on ${'$'}450). Over half the width means the short strike is too close.`);
+  if(tr.strat==='bps'){add(s.px>s.m200?'pass':'fail','Trend gate',s.px>s.m200?'Price is above the 200-day.':'Price is below the 200-day. Rule: do not sell puts below the 200-day just because IV is high.');
+   add(tr.Ks<=s.sup?'pass':'warn','Strike vs support',`Recent support is near ${d2(s.sup)}. Rule: place the short put below support.`)}
+  else{add(s.px>s.m21&&s.m21>s.m50&&s.m50>s.m200&&s.rsi>62?'warn':'pass','Trend gate',s.px>s.m21&&s.m21>s.m50&&s.m50>s.m200&&s.rsi>62?'8/21/50/200 are stacked bullish with strong RSI. Selling calls into this risks a squeeze.':'No strong uptrend against the trade.');
+   add(tr.Ks>=s.res?'pass':'warn','Strike vs resistance',`Recent resistance is near ${d2(s.res)}. Rule: place the short call above resistance.`)}}
+ if(m.kind==='debit'){const ld=Math.round(tr.ld*100);
+  add(s.ivr<40?'pass':s.ivr<=60?'warn':'fail','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. Debit spreads are for low IV; at high IV you are overpaying and a credit spread is the better tool.`);
+  add(ld>=30&&ld<=65?'pass':ld>=22?'warn':'fail','Long strike delta',`Long leg is ${ld} delta. His examples buy around 35 delta or closer to the money; far out-of-the-money longs are lottery tickets.`);
+  add(tr.td>=21?'pass':tr.td===15?'warn':'fail','Days to expiry',`${tr.dte} DTE. A debit spread has negative theta: you must be right on direction and timing, so buy enough time (30-60 DTE).`);
+  add(tr.ror>=1?'pass':tr.ror>=.7?'warn':'fail','Reward vs risk',`Max profit is ${tr.ror.toFixed(1)}x the debit. Aim for at least 1:1 (his example risks about ${'$'}300 for ${'$'}680).`);
+  const al=tr.strat==='bcd'?s.px>s.m50:s.px<s.m50;add(al?'pass':'warn','Trend alignment',al?'Price is on the right side of the 50-day for this direction.':'Price is on the wrong side of the 50-day for this direction.')}
+ if(tr.strat==='csp'){
+  if(sc.junk)add('fail','Stock quality','Unprofitable, below the 200-day, huge IV. Wheel mistake number one: chasing premium on stocks you would not hold through a 60% drop.');
+  add(dl>=20&&dl<=35?'pass':dl>35&&dl<=50?'warn':dl>=12?'warn':'fail','Put delta',`${dl} delta. Rule: 25-35 delta for the wheel (up to 50 only if you truly want the shares). Very low deltas never get the second half of the wheel.`);
+  add(tr.td>=21?'pass':'warn','Days to expiry',`${tr.dte} DTE. He prefers 30-45 or 60-120 DTE for the wheel; weeklies pay more annualised but need constant management.`);
+  add(tr.ann>=.15?'pass':tr.ann>=.1?'warn':'fail','Annualised return',`${pct(tr.ann)} a year on the cash at risk. His calculator target is about 15% or better.`);
+  add(s.px>s.m200?'pass':'fail','Trend gate',s.px>s.m200?'Price is above the 200-day.':'Below the 200-day. He only sells puts on stocks above it.');
+  add(s.ivr>=30?'pass':'warn','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. Rule: sell puts when IV is elevated, ideally on a down day.`)}
+ if(tr.strat==='cc'){const nb=netBasis(st);
+  if(st.shares)add(tr.Ks>=st.gross?'pass':tr.Ks>=nb?'warn':'fail','Strike vs cost basis',`Assigned price ${d2(st.gross)}, net basis ${d2(nb)}. Rule: sell calls above your assigned price; never below cost basis.`);
+  const keep=st.job==='keep';
+  if(keep)add(dl>=10&&dl<=22?'pass':dl<=30?'warn':'fail','Call delta',`${dl} delta on a stock you want to keep. Rule: 15-20 delta; the 40-delta zone caps upside and means constant assignment management.`);
+  else add(dl>=20&&dl<=35?'pass':dl>=12&&dl<=45?'warn':'fail','Call delta',`${dl} delta. Rule for income: 25-35 delta (20-25 when IV Rank is above 50).`);
+  add(s.ivr>=25?'pass':dl>30?'fail':'warn','IV Rank',`IV Rank ${s.ivr.toFixed(0)}. ${s.ivr<25?'Premium is thin. Do not fix that by selling closer to the money; take less, go a bit longer, or skip the cycle.':'Enough premium to be worth selling.'}`);
+  add(tr.td>=21?'pass':'warn','Days to expiry',`${tr.dte} DTE. Baseline is 30-45 DTE (up to 90); weeklies mean 52 decisions a year and high gamma.`)}
+ return C}
+function openTrade(st,tr,roll){
+ if(tr.buyShares){const px=st.w.c[st.t];st.gross=(st.gross*st.shares+px*tr.buyShares)/(st.shares+tr.buyShares);st.shares+=tr.buyShares;st.cash-=px*tr.buyShares;st.log.push(`Bought ${tr.buyShares} shares at ${d2(px)}`)}
+ st.cash+=tr.cash;st.legs=tr.legs.map(l=>Object.assign({},l));st.trade=Object.assign({},tr,{open:st.t,openPx:st.w.c[st.t]});
+ if(tr.strat==='csp'||tr.strat==='cc')st.prem+=tr.cash;
+ if(tr.strat==='cc'&&tr.Ks<netBasis(st)-.005&&st.shares)st.ev.ccBelow=true;
+ st.ev.hit50=null;
+ st.log.push(`${roll?'Rolled to':'Opened'} ${describe(tr)} for ${tr.cash>=0?'a credit of':'a debit of'} ${usd(Math.abs(tr.cash))}`)}
+function describe(tr){const m=STR[tr.strat];return `${tr.n}x ${m.name} ${tr.Ks}${tr.Kl!=null&&tr.legs.length>1?'/'+tr.Kl:''} ${m.type}, ${tr.dte} DTE`}
+function closeCost(st){return st.legs.reduce((a,l)=>a-l.qty*100*(Math.max(0,legVal(st,l))+(l.qty<0?.02:-.02)),0)}
+function closeLegs(st,why){if(!st.legs.length)return 0;const c=closeCost(st);st.cash-=c;if(st.trade&&(st.trade.strat==='csp'||st.trade.strat==='cc'))st.prem-=c;
+ st.log.push(`${why||'Closed'} options for ${c>=0?'a debit of':'a credit of'} ${usd(Math.abs(c))}`);st.legs=[];st.lastTrade=st.trade;st.trade=null;return c}
+function tradePL(st){const tr=st.trade;if(!tr)return null;const c=closeCost(st),pl=tr.cash-c;return{pl,frac:tr.maxP>0?pl/tr.maxP:0,cost:c}}
+function alerts(st){const tr=st.trade,A=[];if(!tr||!st.legs.length)return A;const w=st.w,t=st.t,px=w.c[t],m=STR[tr.strat],p=tradePL(st),left=tr.exp-t,sq=quote(w,t,m.type,tr.Ks,tr.exp);
+ const spread=tr.strat==='bps'||tr.strat==='bcs',itm=m.type==='P'?px<tr.Ks:px>tr.Ks;
+ if(m.kind==='credit'&&p.frac>=.5)A.push({k:'p50',c:'good',t:`Profit is ${pct(p.frac)} of the maximum. Rule: take 50% and redeploy; there is no point waiting for the last $20.`});
+ if(m.kind==='debit'&&p.frac>=.5)A.push({k:'p50',c:'good',t:`Profit is ${pct(p.frac)} of the maximum. Debit spreads give it back fast; consider banking it.`});
+ if(spread&&p.pl<=-2*tr.cash)A.push({k:'stop',c:'bad',t:`Loss is ${usd(-p.pl)}, more than 2x the credit. Rule: close or adjust; this is the final stop.`});
+ else if(spread&&p.pl<=-tr.cash)A.push({k:'stop1',c:'',t:`Loss now equals the credit received. His rule of thumb exit is here; the hard stop is 2x the credit.`});
+ if(m.kind==='debit'&&p.pl<=-.5*tr.maxL)A.push({k:'stop',c:'bad',t:`Down ${usd(-p.pl)}, half the debit. Rule: stop out of a debit spread at about 50% of the premium paid.`});
+ if((spread||tr.strat==='csp')&&!itm){const dp=(tr.openPx+tr.Ks)/2,hit=tr.strat==='bcs'?px>=dp:px<=dp;
+  if(hit||(Math.abs(sq.d)>=.25&&tr.sd<.22))A.push({k:'dp',c:'',t:`Decision point: price is halfway to your short strike (short delta ${Math.round(Math.abs(sq.d)*100)}). Rule: adjust early, not late. Roll down or out for a credit, or close.`})}
+ if(itm&&spread)A.push({k:'itm',c:'bad',t:'Short strike is in the money. Rule: never let the short strike of a spread go in the money.'});
+ if(itm&&tr.strat==='cc'){const tv=sq.p-Math.max(0,px-tr.Ks);A.push({k:'itm',c:'',t:`Call is in the money with ${'$'}${d2(Math.max(0,tv))} of time premium left. Not an emergency: let the shares go, or roll out for a credit.${tv<.1?' Time premium is nearly gone, so assignment is likely.':''}`})}
+ if(itm&&tr.strat==='csp')A.push({k:'itm',c:'',t:'Put is in the money. Assignment is fine if you want the shares; otherwise roll down and out for a credit (2-3 rolls at most).'});
+ if(spread&&left<=5&&left>0)A.push({k:'wk',c:'bad',t:'Expiration week. Gamma is at its highest; rule: be out about a week before expiry.'});
+ else if(spread&&left<=15)A.push({k:'d21',c:'',t:`${Math.round(left*7/5)} DTE. Rule: close or roll around 14-21 DTE, especially a losing position.`});
+ if(w.earn===t+1&&m.kind==='credit')A.push({k:'earn',c:'bad',t:'Earnings are tomorrow. Rule: close premium-selling trades the day before the report.'});
+ if(tr.strat==='csp'&&(px<w.ma[200][t]||px<tr.openPx*.8))A.push({k:'w200',c:'',t:'Stock is below its 200-day (or down 20% from the start). The wheel plan says to consider closing.'});
+ return A}
+function step(st){const w=st.w,tr=st.trade,msgs=[];
+ if(tr&&st.legs.length){const p=tradePL(st),m=STR[tr.strat],px=w.c[st.t],left=tr.exp-st.t,spread=tr.strat==='bps'||tr.strat==='bcs';
+  if(m.kind==='credit'&&p.frac>=.5&&st.ev.hit50==null)st.ev.hit50=st.t;
+  if(st.ev.hit50!=null&&st.t-st.ev.hit50>=5)st.ev.overheld=true;
+  if(st.ev.hit50!=null)st.ev.had50=true;
+  if(spread&&p.pl<=-2*tr.cash)st.ev.pastStop=true;
+  if(m.kind==='debit'&&p.pl<=-.5*tr.maxL)st.ev.pastStop=true;
+  if(spread&&(m.type==='P'?px<tr.Ks:px>tr.Ks))st.ev.heldITM=true;
+  if(spread&&left<=5)st.ev.gamma=true;
+  if(w.earn===st.t+1&&m.kind==='credit')st.ev.earnHeld=true;
+  if(w.earn===st.t+1)st.ev.earnSeen=true}
+ st.t++;const px=w.c[st.t];
+ if(st.legs.length&&st.legs[0].exp<=st.t){const tr=st.trade,L=st.legs;let cash=0;
+  const sp=L.find(l=>l.qty<0&&l.type==='P'),sc2=L.find(l=>l.qty<0&&l.type==='C'),single=L.length===1;
+  if(single&&sp&&px<sp.K){const n=-sp.qty*100;st.gross=(st.gross*st.shares+sp.K*n)/(st.shares+n);st.shares+=n;st.cash-=sp.K*n;st.ev.assigned=true;msgs.push(`Put assigned: bought ${n} shares at ${sp.K}`)}
+  else if(single&&sc2&&px>sc2.K&&st.shares>=-sc2.qty*100){const n=-sc2.qty*100;st.cash+=sc2.K*n;st.shares-=n;st.ev.called=true;if(!st.shares){st.gross=0;st.prem=0}msgs.push(`Shares called away: sold ${n} at ${sc2.K}`)}
+  else{L.forEach(l=>{cash+=l.qty*100*(l.type==='C'?Math.max(0,px-l.K):Math.max(0,l.K-px))});st.cash+=cash;msgs.push(cash===0?'Options expired worthless':`Options settled at expiry for ${usd(cash)}`)}
+  st.legs=[];st.lastTrade=tr;st.trade=null;st.ev.expired=true}
+ msgs.forEach(m=>st.log.push(m));if(st.t>=w.c.length-1)st.end=true;return msgs}
+function debrief(st){const sc=st.sc,w=st.w,s0=st.snap0,fitMap=sc.fit(w),strat=st.entry?st.entry.strat:'skip',fit=fitMap[strat]||0;
+ const R=[];let read=0;const premTruth=s0.ivr>=50?'rich':s0.ivr<=30?'cheap':null;
+ const tOk=!sc.trend||sc.trend.includes(st.read.trend),pOk=!premTruth||st.read.prem===premTruth;read=(tOk?8:0)+(pOk?7:0);
+ const tn={bull:'bullish',neutral:'neutral',bear:'bearish'};
+ R.push({ok:tOk?'pass':'fail',label:'Your trend read',msg:sc.trend?`You said ${tn[st.read.trend]}. The setup was ${sc.trend.map(x=>tn[x]).join(' to ')}.`:'No single right answer on this chart.'});
+ R.push({ok:pOk?'pass':'fail',label:'Your premium read',msg:`You said options were ${st.read.prem}. IV Rank was ${s0.ivr.toFixed(0)} (IV percentile ${s0.ivp.toFixed(0)}): ${premTruth?premTruth:'middling, either answer is fair'}.`});
+ const best=Object.keys(fitMap).sort((a,b)=>fitMap[b]-fitMap[a])[0];
+ R.push({ok:fit>=.8?'pass':fit>=.4?'warn':'fail',label:'Strategy choice',msg:`${STR[strat].name}${fit>=.8?' fits this setup.':fit>=.4?' is workable here, but '+STR[best].name.toLowerCase()+' fits better.':' is the wrong tool here. Best fit: '+STR[best].name.toLowerCase()+'.'}`});
+ const val=x=>x==='pass'?1:x==='warn'?.5:0,avg=a=>a.length?a.reduce((x,y)=>x+val(y.ok),0)/a.length:1;
+ const E=st.entry?st.entry.checks:[],M=[],ev=st.ev,lt=st.entry;
+ if(lt){const m=STR[lt.strat],spread=lt.strat==='bps'||lt.strat==='bcs';
+  if(ev.had50||ev.overheld)M.push({ok:ev.overheld?'fail':'pass',label:'Profit taking',msg:ev.overheld?'The trade reached 50% of max profit and you held on for a week or more. Rule: take 50% in under half the time.':'You banked the trade once it passed 50% of max profit.'});
+  if(spread||m.kind==='debit')M.push({ok:ev.pastStop?'fail':'pass',label:'Stop discipline',msg:ev.pastStop?(spread?'You carried the spread past a loss of 2x the credit.':'You carried the debit spread past a 50% loss of the premium.'):'You never carried the trade past its stop.'});
+  if(spread)M.push({ok:ev.gamma?'fail':'pass',label:'Expiration week',msg:ev.gamma?'You held a credit spread into the final week, where gamma does the damage.':'You were out before expiration week.'});
+  if(spread)M.push({ok:ev.heldITM?'fail':'pass',label:'Short strike',msg:ev.heldITM?'You sat on a short strike that was in the money.':'The short strike was never left in the money.'});
+  if(ev.earnSeen&&m.kind==='credit')M.push({ok:ev.earnHeld?'fail':'pass',label:'Earnings',msg:ev.earnHeld?'You were short premium through the earnings report.':'You were not short premium through earnings.'});
+  if(st.adj)M.push({ok:st.adj<=2?'pass':'fail',label:'Adjustments',msg:`${st.adj} roll${st.adj>1?'s':''}. Rule: two adjustments at most; a third means close.`});
+  if(st.adj)M.push({ok:ev.rollDebit?'warn':'pass',label:'Roll for a credit',msg:ev.rollDebit?'At least one roll cost a net debit. Rule: roll for a credit.':'Every roll brought in a net credit.'});
+  if(ev.ccBelow)M.push({ok:'fail',label:'Calls vs cost basis',msg:'You sold a call below your net cost basis, the number-five wheel mistake.'})}
+ const eq=equity(st),pnl=eq-st.startEq;let score;
+ if(strat==='skip')score=read+85*fit;else score=read+25*fit+35*avg(E)+25*avg(M);
+ score=Math.round(score);
+ const good=score>=70,win=pnl>0;
+ const verdict=strat==='skip'?(fit>=.8?'Right to stand aside':'You passed on a good setup'):good&&win?'Good process, good result':good&&!win?'Good process, unlucky result':!good&&win?'Lucky win: the process was weak':'Weak process, and it cost you';
+ return{score,read,fit,entry:E,mgmt:M,readRules:R,pnl,win,verdict,strat,best,stockMove:w.c[st.t]/st.startPx-1,days:st.t-T0,parts:{read:read/15,fit,entry:avg(E),mgmt:avg(M)}}}
+g.OG={ACCOUNT,H,F,T0,EXP,STR,SC,rng,bs,generate,build,ivRank,ivPct,ivAt,quote,chain,newRound,equity,netBasis,payoff,makeTrade,snap,entryChecks,openTrade,closeLegs,closeCost,tradePL,alerts,step,debrief,describe,pct,usd,d2};
+})(typeof window!=='undefined'?window:globalThis);
+/*END CORE*/
+</script>
+
+<script>
+(function(){
+const O=window.OG,{STR,EXP,T0,ACCOUNT,usd,pct,d2}=O,$=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let J=store.get('pd.journal',[]),P=store.get('pd.prefs',{coach:true,focus:'all',ma8:false,ma21:true,ma50:true,ma200:true,vol:true,rsi:true,ad:true,iv:true,zoom:126});
+let st=null,B=null,phase='read',hover=null,GEO=null,busy=false,recent=[];
+const TICK=['KRVN','ALDX','MTRO','VSTA','ORLO','HLCN','BRSK','TMBR','QNTA','LYRA','DOVE','PXLR','SNDR','CRWL','FENN','GLDR'];
+
+function start(seed,scId){
+ const pool=O.SC.filter(s=>P.focus==='all'||s.focus.includes(P.focus));
+ let sc=scId?O.SC.find(s=>s.id===scId):null;
+ if(!sc){const c=pool.filter(s=>!recent.slice(-Math.min(3,pool.length-1)).includes(s.id));sc=(c.length?c:pool)[Math.floor(Math.random()*(c.length||pool.length))]}
+ seed=seed||Math.floor(Math.random()*1e9);recent.push(sc.id);
+ st=O.newRound(sc,seed);st.seed=seed;st.tick=TICK[seed%TICK.length];st.snap0=O.snap(st);
+ B=null;phase='read';hover=null;renderAll()}
+function renderAll(){renderKpis();renderBrief();renderCtl();renderPanel();draw()}
+function renderKpis(){const n=J.length,avg=n?J.reduce((a,r)=>a+r.score,0)/n:0,tot=J.reduce((a,r)=>a+r.pnl,0),tr=J.filter(r=>r.strat!=='skip'),wr=tr.length?tr.filter(r=>r.pnl>0).length/tr.length:0;
+ const eq=st?O.equity(st):ACCOUNT;
+ $('kpis').innerHTML=`<div class="kpi"><span class="lab">Round equity</span><b>${usd(eq)}</b></div><div class="kpi"><span class="lab">Rounds</span><b>${n}</b></div><div class="kpi"><span class="lab">Avg process</span><b>${n?avg.toFixed(0):'-'}</b></div><div class="kpi"><span class="lab">Win rate</span><b>${tr.length?pct(wr):'-'}</b></div><div class="kpi"><span class="lab">Total P/L</span><b class="${tot<0?'down':tot>0?'up':''}">${usd(tot)}</b></div>`}
+function renderBrief(){const s=O.snap(st),sc=st.sc,w=st.w,deb=phase==='debrief';
+ const hold=st.shares?` You hold ${st.shares} shares, assigned at ${d2(st.gross)} (net basis ${d2(O.netBasis(st))}).${st.job==='income'?' Their job: income; being called away is fine.':st.job==='keep'?' Their job: growth; you want to keep them.':''}`:'';
+ $('brief').innerHTML=`<h2>${st.tick}</h2><p>${deb?'<b>'+sc.title+'.</b> ':''}${sc.kind}.${hold}</p>`;
+ const rel=(a,b)=>`<b class="${a>b?'up':'down'}">${a>b?'above':'below'}</b>`;
+ const e=s.earnIn!=null?`<b class="warn">in ${s.earnIn} days</b>`:(w.earn!=null?'<b>reported</b>':'<b>none ahead</b>');
+ $('facts').innerHTML=`<div><span class="lab">Price</span><b>${d2(s.px)}</b></div><div><span class="lab">IV (30d)</span><b>${pct(s.iv)}</b></div><div><span class="lab">IV Rank</span><b>${s.ivr.toFixed(0)}</b></div><div><span class="lab">IV percentile</span><b>${s.ivp.toFixed(0)}</b></div><div><span class="lab">RSI 14</span><b>${s.rsi.toFixed(0)}</b></div><div><span class="lab">vs 50-day</span>${rel(s.px,s.m50)}</div><div><span class="lab">vs 200-day</span>${rel(s.px,s.m200)}</div><div><span class="lab">Expected move 30d</span><b>&plusmn;${d2(s.em)}</b></div><div><span class="lab">Earnings</span>${e}</div><div><span class="lab">VIX term structure</span><b class="${w.market==='back'?'down':''}">${w.market==='back'?'backwardation':'contango'}</b></div>`}
+function renderCtl(){const c=(k,l,col)=>`<button class="chip" data-tog="${k}" aria-pressed="${!!P[k]}">${col?`<i style="background:var(--${col})"></i>`:''}${l}</button>`;
+ const z=(n,l)=>`<button class="chip" data-zoom="${n}" aria-pressed="${P.zoom===n}">${l}</button>`;
+ $('ctl').innerHTML=c('ma8','8','ma8')+c('ma21','21','ma21')+c('ma50','50','ma50')+c('ma200','200','ma200')+c('vol','Vol')+c('rsi','RSI')+c('ad','A/D')+c('iv','IV')+'<span style="flex:1"></span>'+z(63,'3M')+z(126,'6M')+z(252,'1Y')}
+
+/* ---------- panel ---------- */
+function checksHtml(C){return `<ul class="checks">${C.map(c=>`<li><span class="tag ${c.ok}">${c.ok.toUpperCase()}</span><div><b>${c.label}.</b> <span>${c.msg}</span></div></li>`).join('')}</ul>`}
+function renderPanel(){const el=$('panel');
+ if(phase==='read'){const r=st.read,b=(k,v,l)=>`<button class="btn" data-read="${k}:${v}" aria-pressed="${r[k]===v}">${l}</button>`;
+  el.innerHTML=`<div class="step">Step 1 of 3</div><h3>Read the chart before you touch an option</h3>
+  <p class="note">Check price against the 21, 50 and 200-day averages, RSI, the A/D line, IV Rank, the earnings date and the VIX term structure.</p>
+  <div class="q">Where is this stock most likely headed over the next month?</div><div class="seg">${b('trend','bull','Bullish')}${b('trend','neutral','Neutral')}${b('trend','bear','Bearish')}</div>
+  <div class="q">Are options rich (sell them) or cheap (buy them)?</div><div class="seg">${b('prem','rich','Rich')}${b('prem','cheap','Cheap')}</div>
+  <div class="row" style="margin-top:14px"><button class="btn pri" data-act="toBuild" ${r.trend&&r.prem?'':'disabled'}>Choose a strategy</button></div>`}
+ else if(phase==='build')renderBuild(el);
+ else if(phase==='manage')renderManage(el);
+ else renderDebrief(el)}
+function defaults(strat){const w=st.w,stp=w.step,atm=Math.round(w.c[st.t]/stp)*stp;B.Ks=+atm.toFixed(2);
+ B.Kl=+(atm+(strat==='bps'?-stp:strat==='bcs'?stp:strat==='bcd'?-stp:stp)).toFixed(2);
+ if(strat==='bcd'||strat==='bpd'){B.Kl=+atm.toFixed(2);B.Ks=+(atm+(strat==='bcd'?stp:-stp)).toFixed(2)}}
+function renderBuild(el){const roll=B.roll;
+ const cards=Object.keys(STR).filter(k=>!roll||k===B.strat).map(k=>`<button class="btn strat" data-strat="${k}" aria-pressed="${B.strat===k}"><b>${STR[k].name}</b><span>${STR[k].hint}</span></button>`).join('');
+ let h=`<div class="step">${roll?'Adjust':'Step 2 of 3'}</div><h3>${roll?'Roll the position':'Pick the strategy and build it'}</h3><div class="strats">${cards}</div>`;
+ if(B.strat==='skip'){h+=`<p class="note">You stay in cash and the next 30 trading days are revealed. Standing aside is graded like any other decision.</p><div class="row"><button class="btn pri" data-act="skip">Stay in cash</button><button class="btn" data-act="back">Back</button></div>`;el.innerHTML=h;return}
+ if(B.strat){const m=STR[B.strat],two=B.strat!=='csp'&&B.strat!=='cc',ch=O.chain(st.w,st.t,m.type,B.exp);
+  const opt=(sel)=>ch.map(c=>`<option value="${c.K}" ${Math.abs(c.K-sel)<1e-6?'selected':''}>${c.K.toFixed(st.w.step<1?1:st.w.step%1?1:0).padStart(6)}  ${Math.round(Math.abs(c.d)*100)}d  $${d2(c.p)}</option>`).join('');
+  const exps=EXP.map(e=>`<option value="${e.td}" ${B.exp===st.t+e.td?'selected':''}>${e.d} DTE${st.w.earn!=null&&st.w.earn>st.t&&st.w.earn<=st.t+e.td?'  (earnings inside)':''}</option>`).join('');
+  const stp=(k)=>`<span class="stp"><button class="btn" data-nudge="${k}:-1" aria-label="Lower strike">&minus;</button><button class="btn" data-nudge="${k}:1" aria-label="Higher strike">+</button></span>`;
+  h+=`<div class="row"><label for="bexp">Expiry</label><select id="bexp">${exps}</select></div>
+  <div class="row"><label for="bks">${m.kind==='debit'?'Sell':'Short'} ${m.type==='P'?'put':'call'}</label><select id="bks">${opt(B.Ks)}</select>${stp('Ks')}</div>`;
+  if(two)h+=`<div class="row"><label for="bkl">${m.kind==='debit'?'Buy':'Long'} ${m.type==='P'?'put':'call'}</label><select id="bkl">${opt(B.Kl)}</select>${stp('Kl')}</div>`;
+  h+=`<div class="row"><label>Contracts</label><span class="stp"><button class="btn" data-n="-1" aria-label="Fewer contracts">&minus;</button><button class="btn" disabled style="opacity:1;width:44px;font-family:var(--mono)">${B.n}</button><button class="btn" data-n="1" aria-label="More contracts">+</button></span>
+   ${two?`<span class="seg" style="margin-left:auto"><button class="chip" data-leg="Ks" aria-pressed="${B.leg==='Ks'}">Chart tap: ${m.kind==='debit'?'sell':'short'}</button><button class="chip" data-leg="Kl" aria-pressed="${B.leg==='Kl'}">${m.kind==='debit'?'buy':'long'}</button></span>`:'<span class="note" style="margin:0 0 0 auto">Tap the chart to set the strike</span>'}</div>`;
+  const tr=O.makeTrade(st,B.strat,B.exp,B.Ks,B.Kl,B.n);B.tr=tr;
+  if(!tr.valid)h+=`<div class="alert bad">Those strikes do not make a ${m.name.toLowerCase()}. ${B.strat==='bps'?'The long put goes below the short put.':B.strat==='bcs'?'The long call goes above the short call.':B.strat==='bcd'?'Buy the lower call and sell the higher one.':'Buy the higher put and sell the lower one.'}</div>`;
+  else{const mt=(l,v,c)=>`<div><span class="lab">${l}</span><b class="${c||''}">${v}</b></div>`;
+   h+=`<div class="metrics">${mt(tr.cash>=0?'Credit':'Debit',usd(Math.abs(tr.cash)))}${mt('Max profit',usd(tr.maxP),'up')}${mt('Max loss',usd(tr.maxL),'down')}${mt('Breakeven',d2(tr.be[0]))}${mt(tr.ann!=null?'Annualised':'Return on risk',pct(tr.ann!=null?tr.ann:tr.ror))}${mt('Prob. of profit',pct(tr.pop))}${mt('Short delta',Math.round(tr.sd*100))}${mt(B.strat==='csp'?'Cash secured':'Risk of account',B.strat==='csp'?pct(tr.capital/ACCOUNT):B.strat==='cc'?(tr.buyShares?pct(tr.capital/ACCOUNT):'shares held'):(tr.maxL/ACCOUNT*100).toFixed(1)+'%')}</div>
+   <canvas id="pay" height="150" aria-label="Payoff at expiry"></canvas>`;
+   if(roll){const cc=O.closeCost(st),net=tr.cash-cc;h+=`<div class="alert ${net>=0?'good':'bad'}">Closing the old position costs ${usd(cc)}; the new one brings ${usd(tr.cash)}. Net ${net>=0?'credit':'debit'} for the roll: ${usd(Math.abs(net))}. Adjustment ${st.adj+1} of 2.</div>`}
+   if(!tr.afford)h+=`<div class="alert bad">Not enough cash in a $20,000 account for this.${B.strat==='csp'||B.strat==='cc'?' Gavin: under about $20,000, use credit spreads instead of wheeling expensive stocks.':''}</div>`;
+   if(P.coach&&!roll)h+=`<div class="lab" style="margin-top:10px">Coach: live rule check</div>`+checksHtml(O.entryChecks(st,tr))}
+  h+=`<div class="row"><button class="btn pri" data-act="place" ${tr.valid&&tr.afford?'':'disabled'}>${roll?'Roll':'Place trade'}</button><button class="btn" data-act="back">${roll?'Cancel':'Back'}</button></div>`}
+ else h+=`<div class="row"><button class="btn" data-act="back">Back</button></div>`;
+ el.innerHTML=h;drawPay()}
+function renderManage(el){const tr=st.trade,p=O.tradePL(st),eq=O.equity(st),pl=eq-st.startEq;
+ let h=`<div class="step">Step 3 of 3</div><h3>Manage it</h3>`;
+ const mt=(l,v,c)=>`<div><span class="lab">${l}</span><b class="${c||''}">${v}</b></div>`;
+ if(tr){const q=O.quote(st.w,st.t,STR[tr.strat].type,tr.Ks,tr.exp);
+  h+=`<p class="note" style="color:var(--ink)"><b>${O.describe(tr)}</b></p><div class="metrics">${mt('Open P/L',usd(p.pl),p.pl>=0?'up':'down')}${mt('Of max profit',pct(Math.max(-9.99,p.frac)))}${mt('Days left',Math.round((tr.exp-st.t)*7/5)+' DTE')}${mt('Short delta',Math.round(Math.abs(q.d)*100))}${mt('Cost to close',usd(p.cost))}${mt('Round P/L',usd(pl),pl>=0?'up':'down')}</div>`;
+  const A=O.alerts(st);h+=A.length?A.map(a=>`<div class="alert ${a.c}">${a.t}</div>`).join(''):`<p class="note">No rule is triggered. Theta is working; let time pass.</p>`;
+  h+=`<div class="row"><button class="btn pri" data-adv="1" ${busy?'disabled':''}>Next day</button><button class="btn" data-adv="5" ${busy?'disabled':''}>+5 days</button><button class="btn" data-adv="99" ${busy?'disabled':''}>Run to next alert</button></div>
+  <div class="row"><button class="btn" data-act="close" ${busy?'disabled':''}>Close position</button><button class="btn" data-act="roll" ${busy?'disabled':''}>Roll</button></div>`}
+ else{h+=`<div class="metrics">${mt('Shares',st.shares)}${mt('Assigned price',st.shares?d2(st.gross):'-')}${mt('Net basis',st.shares?d2(O.netBasis(st)):'-')}${mt('Round P/L',usd(pl),pl>=0?'up':'down')}</div>`;
+  h+=st.shares?`<p class="note">You own the shares. Wheel, phase 2: sell a call above your assigned price, or wait if nothing up there pays.</p><div class="row"><button class="btn pri" data-act="sellcc">Sell a covered call</button><button class="btn" data-act="sellcsp">Sell another put</button></div><div class="row"><button class="btn" data-adv="5">Wait 5 days</button><button class="btn" data-act="finish">Finish round</button></div>`
+   :`<p class="note">You are flat.</p><div class="row"><button class="btn pri" data-act="finish">See the debrief</button></div>`}
+ h+=`<div class="log">${st.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div>`;el.innerHTML=h}
+function renderDebrief(el){const D=st.D,sc=st.sc,bar=(l,v)=>`<div class="bar"><span>${l}</span><div class="trk"><i style="width:${Math.round(v*100)}%"></i></div><b>${Math.round(v*100)}%</b></div>`;
+ el.innerHTML=`<div class="step">Debrief</div><div class="score"><div class="big">${D.score}<small>/100</small></div><div><div class="verdict">${D.verdict}</div><div class="note" style="margin:2px 0 0">Process score. Result: <b class="${D.pnl>0?'up':D.pnl<0?'down':''}">${usd(D.pnl)}</b> over ${D.days} trading days; the stock moved ${(D.stockMove*100).toFixed(1)}%.</div></div></div>
+ <div class="bars">${bar('Chart read',D.parts.read)}${bar('Strategy fit',D.parts.fit)}${D.strat!=='skip'?bar('Entry rules',D.parts.entry)+bar('Management',D.parts.mgmt):''}</div>
+ <div class="reveal"><b>The setup: ${sc.title}</b><p style="margin:4px 0">${sc.lesson}</p><p style="margin:4px 0"><b>Rulebook play.</b> ${sc.ideal}</p></div>
+ ${checksHtml(D.readRules)}${D.entry.length?'<div class="lab">Entry</div>'+checksHtml(D.entry):''}${D.mgmt.length?'<div class="lab">Management</div>'+checksHtml(D.mgmt):''}
+ <div class="row"><button class="btn pri" data-act="next">Next round</button><button class="btn" data-act="replay">Replay this chart</button></div>
+ <div class="log">${st.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div>`}
+
+/* ---------- actions ---------- */
+function finish(){if(st.legs.length)O.closeLegs(st,'Closed at round end:');st.D=O.debrief(st);phase='debrief';
+ J.push({ts:Date.now(),sc:st.sc.id,title:st.sc.title,strat:st.D.strat,score:st.D.score,pnl:Math.round(st.D.pnl),fit:st.D.fit});J=J.slice(-300);store.set('pd.journal',J);renderAll()}
+function advance(n){if(busy)return;busy=true;const before=new Set(O.alerts(st).map(a=>a.k));let i=0;
+ const go=()=>{const had=st.legs.length>0;O.step(st);i++;hover=null;
+  const now=O.alerts(st),fresh=now.some(a=>!before.has(a.k)),stop=st.end||i>=n||(n>1&&fresh)||(had&&!st.legs.length)||(n>5&&!st.legs.length&&i>=5);
+  if(stop){busy=false;if(st.end||(!st.legs.length&&!st.shares)||(!st.legs.length&&st.sc.hold&&!st.ev.assigned))return finish();renderAll()}
+  else{renderKpis();renderBrief();draw();setTimeout(go,n>5?45:80)}};
+ renderPanel();go()}
+document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;const d=t.dataset;
+ if(d.tab){document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b===t));['play','stats','rules'].forEach(k=>$('tab-'+k).hidden=k!==d.tab);if(d.tab==='stats')renderStats();if(d.tab==='play')draw();return}
+ if(t.id==='coach'){P.coach=!P.coach;t.setAttribute('aria-pressed',P.coach);t.textContent=P.coach?'Coach on':'Coach off';store.set('pd.prefs',P);renderPanel();return}
+ if(d.tog){P[d.tog]=!P[d.tog];store.set('pd.prefs',P);renderCtl();draw();return}
+ if(d.zoom){P.zoom=+d.zoom;store.set('pd.prefs',P);renderCtl();draw();return}
+ if(d.read){const[k,v]=d.read.split(':');st.read[k]=v;renderPanel();return}
+ if(d.strat){B.strat=d.strat;if(d.strat!=='skip'){if(!B.roll)B.exp=st.t+32;defaults(d.strat)}renderPanel();draw();return}
+ if(d.nudge){const[k,s]=d.nudge.split(':');B[k]=+(B[k]+s*st.w.step).toFixed(2);renderPanel();draw();return}
+ if(d.n){B.n=Math.max(1,Math.min(10,B.n+ +d.n));renderPanel();return}
+ if(d.leg){B.leg=d.leg;renderPanel();return}
+ if(d.adv){advance(+d.adv);return}
+ const a=d.act;if(!a)return;
+ if(a==='toBuild'){B={strat:null,n:1,leg:'Ks',exp:st.t+32};phase='build'}
+ else if(a==='back'){if(B&&B.roll){phase='manage'}else if(B&&B.strat&&!B.locked){B.strat=null}else if(B&&B.locked){phase='manage'}else phase='read';if(phase!=='build')B=null}
+ else if(a==='skip'){st.entry=null;st.log.push('Stayed in cash');phase='manage';renderAll();advance(30);return}
+ else if(a==='place'){const tr=B.tr;if(B.roll){const cc=O.closeLegs(st,'Roll: closed');if(tr.cash-cc<0)st.ev.rollDebit=true;st.adj++;O.openTrade(st,tr,true)}
+  else{if(!st.entry)st.entry={strat:tr.strat,checks:O.entryChecks(st,tr)};O.openTrade(st,tr,false)}B=null;phase='manage'}
+ else if(a==='close'){O.closeLegs(st);if(!st.shares||(st.sc.hold&&!st.ev.assigned))return finish()}
+ else if(a==='roll'){const tr=st.trade;B={strat:tr.strat,n:tr.n,leg:'Ks',exp:Math.min(st.w.c.length-2,Math.max(tr.exp,st.t+21)),Ks:tr.Ks,Kl:tr.Kl,roll:true};phase='build'}
+ else if(a==='sellcc'||a==='sellcsp'){B={strat:a==='sellcc'?'cc':'csp',n:1,leg:'Ks',exp:Math.min(st.w.c.length-2,st.t+32),locked:true,roll:false};defaults(B.strat);phase='build'}
+ else if(a==='finish')return finish();
+ else if(a==='next')return start();
+ else if(a==='replay')return start(st.seed,st.sc.id);
+ renderAll()});
+document.addEventListener('change',e=>{const t=e.target;
+ if(t.id==='focus'){P.focus=t.value;store.set('pd.prefs',P);start();return}
+ if(!B)return;if(t.id==='bexp')B.exp=Math.min(st.w.c.length-2,st.t+ +t.value);if(t.id==='bks')B.Ks=+t.value;if(t.id==='bkl')B.Kl=+t.value;renderPanel();draw()});
+
+/* ---------- chart ---------- */
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function draw(){const cv=$('chart');if(!st||$('tab-play').hidden)return;const w=st.w,t=st.t,W=cv.parentElement.clientWidth-16;if(W<50)return;
+ const C={ink:css('--ink'),mu:css('--muted'),ln:css('--line'),up:css('--up'),dn:css('--down'),wn:css('--warn'),ac:css('--accent'),bg:css('--surface'),m8:css('--ma8'),m21:css('--ma21'),m50:css('--ma50'),m200:css('--ma200')};
+ const panes=[{k:'price',h:W<520?250:330}];if(P.vol)panes.push({k:'vol',h:52});if(P.rsi)panes.push({k:'rsi',h:80});if(P.ad)panes.push({k:'ad',h:70});if(P.iv)panes.push({k:'iv',h:70});
+ const Ht=panes.reduce((a,p)=>a+p.h+8,0)+16,dpr=window.devicePixelRatio||1;cv.style.height=Ht+'px';cv.width=Math.round(W*dpr);cv.height=Math.round(Ht*dpr);
+ const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,Ht);
+ const padR=50,padL=4,pw=W-padL-padR,i0=Math.max(t-P.zoom+1,t-251,O.H-252);
+ const tr=st.trade||(phase==='build'&&B&&B.tr&&B.tr.valid?B.tr:null),fexp=tr?tr.exp:null;
+ const fut=phase==='debrief'?2:Math.min(70,Math.max(8,fexp?fexp-t+2:0)),slots=t-i0+1+fut,bw=pw/slots,X=i=>padL+(i-i0+.5)*bw;
+ const hi=hover!=null&&hover>=i0&&hover<=t?hover:t;
+ x.font='11px '+css('--mono');x.textBaseline='middle';
+ let y0=6;GEO={i0,bw,padL,t,panes:[]};
+ const axis=(yf,vals,fmt,top,h)=>{x.strokeStyle=C.ln;x.fillStyle=C.mu;x.lineWidth=1;x.textAlign='left';vals.forEach(v=>{const y=yf(v);if(y<top+4||y>top+h-2)return;x.globalAlpha=.6;x.beginPath();x.moveTo(padL,y);x.lineTo(padL+pw,y);x.stroke();x.globalAlpha=1;x.fillText(fmt(v),padL+pw+5,y)})};
+ const nice=(lo,hi,n)=>{const r=(hi-lo)/n,p=Math.pow(10,Math.floor(Math.log10(r))),s=[1,2,2.5,5,10].find(m=>m*p>=r)*p,out=[];for(let v=Math.ceil(lo/s)*s;v<=hi;v+=s)out.push(v);return out};
+ const line=(arr,yf,col,lw,dash)=>{x.strokeStyle=col;x.lineWidth=lw||1.5;x.setLineDash(dash||[]);x.beginPath();let on=false;for(let i=i0;i<=t;i++){const v=arr[i];if(v==null)continue;const px=X(i),py=yf(v);on?x.lineTo(px,py):x.moveTo(px,py);on=true}x.stroke();x.setLineDash([])};
+ const vline=(i,col,lab,top,h,dash)=>{if(i<i0||i>i0+slots-1)return;const px=X(i);x.strokeStyle=col;x.lineWidth=1;x.setLineDash(dash||[4,3]);x.beginPath();x.moveTo(px,top);x.lineTo(px,top+h);x.stroke();x.setLineDash([]);if(lab){x.fillStyle=col;x.textAlign='center';x.fillText(lab,Math.min(Math.max(px,padL+30),padL+pw-30),top+h-7)}};
+ panes.forEach(p=>{const top=y0,h=p.h;x.fillStyle=C.mu;x.textAlign='left';
+  if(p.k==='price'){let lo=1e9,mx=0;for(let i=i0;i<=t;i++){lo=Math.min(lo,w.bars[i].l);mx=Math.max(mx,w.bars[i].h);[8,21,50,200].forEach(n=>{const v=w.ma[n][i];if(P['ma'+n]&&v){lo=Math.min(lo,v);mx=Math.max(mx,v)}})}
+   const px=w.c[t];let cone=null;
+   if(tr&&st.legs.length+ (phase==='build'?1:0)>0&&phase!=='debrief'){tr.legs.forEach(l=>{if(Math.abs(l.K/px-1)<.3){lo=Math.min(lo,l.K);mx=Math.max(mx,l.K)}});
+    const v=O.ivAt(w,t,tr.exp),sd=v*Math.sqrt(Math.max(1,tr.exp-t)/252);cone={u:px*Math.exp(sd),d:px*Math.exp(-sd)};lo=Math.min(lo,cone.d);mx=Math.max(mx,cone.u)}
+   const pad=(mx-lo)*.06;lo-=pad;mx+=pad;const Y=v=>top+18+(mx-v)/(mx-lo)*(h-22);p.Y=Y;p.inv=y=>mx-(y-top-18)/(h-22)*(mx-lo);
+   axis(Y,nice(lo,mx,5),v=>v.toFixed(v<100?1:0),top,h);
+   if(cone){const xs=X(t),xe=X(tr.exp);x.fillStyle=C.ac;x.globalAlpha=.1;x.beginPath();x.moveTo(xs,Y(px));x.lineTo(xe,Y(cone.u));x.lineTo(xe,Y(cone.d));x.closePath();x.fill();x.globalAlpha=1}
+   const cw=Math.max(1,Math.min(9,bw*.66));
+   for(let i=i0;i<=t;i++){const b=w.bars[i],up=b.c>=b.o,cx=X(i);x.strokeStyle=x.fillStyle=up?C.up:C.dn;x.lineWidth=1;x.beginPath();x.moveTo(cx,Y(b.h));x.lineTo(cx,Y(b.l));x.stroke();
+    const a=Y(Math.max(b.o,b.c)),bb=Math.max(1,Y(Math.min(b.o,b.c))-a);if(up&&cw>=4){x.fillStyle=C.bg;x.fillRect(cx-cw/2,a,cw,bb);x.strokeRect(cx-cw/2+.5,a+.5,cw-1,Math.max(0,bb-1))}else x.fillRect(cx-cw/2,a,cw,bb)}
+   [[8,C.m8],[21,C.m21],[50,C.m50],[200,C.m200]].forEach(([n,c])=>{if(P['ma'+n])line(w.ma[n],Y,c,n===200?2:1.5)});
+   if(tr&&phase!=='debrief'&&(st.legs.length||phase==='build')){tr.legs.forEach(l=>{const y=Y(l.K);if(y<top+10||y>top+h)return;const sh=l.qty<0;x.strokeStyle=sh?C.dn:C.up;x.lineWidth=1.5;x.setLineDash([6,4]);x.beginPath();x.moveTo(padL,y);x.lineTo(padL+pw,y);x.stroke();x.setLineDash([]);
+     x.fillStyle=C.ink;x.textAlign='left';x.fillText(`${sh?'SELL':'BUY'} ${l.K} ${l.type==='P'?'put':'call'}`,padL+4,y-8)});
+    const by=Y(tr.be[0]);if(by>top+10&&by<top+h){x.strokeStyle=C.mu;x.setLineDash([2,3]);x.beginPath();x.moveTo(padL,by);x.lineTo(padL+pw,by);x.stroke();x.setLineDash([]);x.fillStyle=C.mu;x.textAlign='right';x.fillText('breakeven '+d2(tr.be[0]),padL+pw-4,by-8)}
+    vline(tr.exp,C.ac,'expiry',top+18,h-18)}
+   if(st.trade&&st.trade.open>=i0)vline(st.trade.open,C.mu,'',top+18,h-18,[1,3]);
+   if(phase==='debrief')vline(T0,C.ac,'you traded here',top+18,h-18);
+   if(w.earn!=null)vline(w.earn,C.wn,'earnings',top+18,h-30);
+   x.fillStyle=C.ink;x.fillRect(padL+pw,Y(px)-8,padR,16);x.fillStyle=C.bg;x.textAlign='left';x.fillText(d2(px),padL+pw+5,Y(px));
+   const b=w.bars[hi];x.fillStyle=C.ink;x.textAlign='left';let tx=padL+2;
+   const put=(s,c)=>{x.fillStyle=c||C.ink;x.fillText(s,tx,top+8);tx+=x.measureText(s).width+10};
+   put(hi===t?'Today':'Day '+(hi-t));put(`O ${d2(b.o)} H ${d2(b.h)} L ${d2(b.l)} C ${d2(b.c)}`,C.mu);
+   if(W>=520)[[8,C.m8],[21,C.m21],[50,C.m50],[200,C.m200]].forEach(([n,c])=>{if(P['ma'+n]&&w.ma[n][hi]){x.fillStyle=c;x.fillRect(tx,top+6,8,3);tx+=11;put(`${n}d ${w.ma[n][hi].toFixed(1)}`,C.mu)}})}
+  else{let lo=1e18,mx=-1e18,arr,lab,fmt=v=>v.toFixed(0);
+   if(p.k==='vol'){arr=w.bars.map(b=>b.v);lo=0;for(let i=i0;i<=t;i++)mx=Math.max(mx,arr[i]);const Y=v=>top+h-(v/mx)*(h-14);
+    for(let i=i0;i<=t;i++){const b=w.bars[i];x.fillStyle=b.c>=b.o?C.up:C.dn;x.globalAlpha=.55;const y=Y(b.v);x.fillRect(X(i)-Math.max(1,bw*.33),y,Math.max(1,bw*.66),top+h-y)}x.globalAlpha=1;line(w.vma,Y,C.mu,1);
+    lab=`Volume ${(arr[hi]/1e6).toFixed(2)}M  (20d avg ${(w.vma[hi]/1e6).toFixed(2)}M)`}
+   else{arr=p.k==='rsi'?w.rsi:p.k==='ad'?w.ad:w.ivd;if(p.k==='rsi'){lo=0;mx=100}else for(let i=i0;i<=t;i++){lo=Math.min(lo,arr[i]);mx=Math.max(mx,arr[i])}
+    if(p.k==='iv'){for(let i=t-251;i<=t;i++){lo=Math.min(lo,arr[i]);mx=Math.max(mx,arr[i])}}
+    const pd=(mx-lo)*.08||1;if(p.k!=='rsi'){lo-=pd;mx+=pd}const Y=v=>top+14+(mx-v)/(mx-lo)*(h-16);
+    if(p.k==='rsi'){axis(Y,[30,50,70],fmt,top,h);x.fillStyle=C.dn;x.globalAlpha=.07;x.fillRect(padL,Y(100),pw,Y(70)-Y(100));x.fillStyle=C.up;x.fillRect(padL,Y(30),pw,Y(0)-Y(30));x.globalAlpha=1;lab=`RSI 14  ${arr[hi].toFixed(0)}`}
+    if(p.k==='ad'){lab='Accumulation / distribution line';const a0=arr[Math.max(i0,hi-20)];lab+=`  ${arr[hi]>a0?'rising':'falling'} over 20 days`}
+    if(p.k==='iv'){let l2=9,h2=0;for(let i=t-251;i<=t;i++){l2=Math.min(l2,arr[i]);h2=Math.max(h2,arr[i])}axis(Y,[l2,h2],v=>pct(v),top,h);
+     x.fillStyle=C.mu;x.textAlign='right';x.fillText('52-week high',padL+pw-4,Y(h2)+8);x.fillText('52-week low',padL+pw-4,Y(l2)-8);x.textAlign='left';
+     lab=`Implied volatility ${pct(arr[hi])}  IV Rank ${O.ivRank(w,hi).toFixed(0)}  percentile ${O.ivPct(w,hi).toFixed(0)}`}
+    line(arr,Y,p.k==='rsi'?C.m200:p.k==='ad'?C.m21:C.m50,1.6);const ex=X(t),ey=Y(arr[t]);x.fillStyle=p.k==='rsi'?C.m200:p.k==='ad'?C.m21:C.m50;x.beginPath();x.arc(ex,ey,3,0,7);x.fill();
+    if(w.earn!=null)vline(w.earn,C.wn,'',top+14,h-14)}
+   x.fillStyle=C.mu;x.textAlign='left';x.fillText(lab,padL+2,top+7)}
+  x.strokeStyle=C.ln;x.lineWidth=1;x.strokeRect(padL+.5,top+.5,pw,h);GEO.panes.push({k:p.k,top,h,Y:p.Y,inv:p.inv});y0+=h+8});
+ if(hover!=null&&hover>=i0&&hover<=t){x.strokeStyle=C.mu;x.setLineDash([3,3]);x.beginPath();x.moveTo(X(hover),6);x.lineTo(X(hover),y0-8);x.stroke();x.setLineDash([])}}
+function drawPay(){const cv=$('pay');if(!cv||!B||!B.tr||!B.tr.valid)return;const tr=B.tr,W=cv.parentElement.clientWidth-24,Hh=150,dpr=window.devicePixelRatio||1;
+ cv.style.height=Hh+'px';cv.width=W*dpr;cv.height=Hh*dpr;const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);
+ const px=st.w.c[st.t],v=O.ivAt(st.w,st.t,tr.exp),sp=Math.max(.12,2.6*v*Math.sqrt(tr.td/252)),lo=px*(1-sp),hi=px*(1+sp),N=120,pts=[];let mn=0,mx=0;
+ for(let i=0;i<=N;i++){const s=lo+(hi-lo)*i/N,y=O.payoff(tr,s,st);pts.push([s,y]);mn=Math.min(mn,y);mx=Math.max(mx,y)}
+ const pad=(mx-mn)*.15||1;mn-=pad;mx+=pad;const X=s=>40+(s-lo)/(hi-lo)*(W-48),Y=y=>10+(mx-y)/(mx-mn)*(Hh-34),z=Y(0);
+ const up=css('--up'),dn=css('--down'),mu=css('--muted'),ink=css('--ink');x.font='11px '+css('--mono');x.textBaseline='middle';
+ [[up,0,z],[dn,z,Hh]].forEach(([c,a,b])=>{x.save();x.beginPath();x.rect(40,a,W-48,b-a);x.clip();x.fillStyle=c;x.globalAlpha=.16;x.beginPath();x.moveTo(X(lo),z);pts.forEach(p=>x.lineTo(X(p[0]),Y(p[1])));x.lineTo(X(hi),z);x.closePath();x.fill();x.globalAlpha=1;x.strokeStyle=c;x.lineWidth=2;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.stroke();x.restore()});
+ x.strokeStyle=mu;x.lineWidth=1;x.beginPath();x.moveTo(40,z);x.lineTo(W-8,z);x.stroke();
+ x.setLineDash([3,3]);x.beginPath();x.moveTo(X(px),8);x.lineTo(X(px),Hh-22);x.stroke();x.setLineDash([]);
+ x.fillStyle=mu;x.textAlign='center';x.fillText('now '+d2(px),X(px),Hh-10);const be=tr.be[0];if(be>lo&&be<hi&&Math.abs(X(be)-X(px))>52)x.fillText('b/e '+d2(be),X(be),Hh-10);
+ x.textAlign='left';x.fillStyle=ink;x.fillText(usd(tr.maxP),2,Y(Math.min(mx-pad,tr.maxP)));x.fillText(usd(-tr.maxL),2,Math.min(Hh-28,Y(Math.max(mn+pad,-tr.maxL))));x.fillStyle=mu;x.fillText('P/L at expiry',44,14)}
+const cv=$('chart');
+function idxAt(e){const r=cv.getBoundingClientRect(),px=e.clientX-r.left;return{i:Math.floor((px-GEO.padL)/GEO.bw)+GEO.i0,y:e.clientY-r.top}}
+cv.addEventListener('pointermove',e=>{if(!GEO)return;const{i}=idxAt(e),h=i>=GEO.i0&&i<=st.t?i:null;if(h!==hover){hover=h;draw()}});
+cv.addEventListener('pointerleave',()=>{if(hover!=null){hover=null;draw()}});
+cv.addEventListener('click',e=>{if(phase!=='build'||!B||!B.strat||B.strat==='skip'||!GEO)return;const{y}=idxAt(e),p=GEO.panes[0];if(y<p.top||y>p.top+p.h||!p.inv)return;
+ const stp=st.w.step,K=+(Math.round(p.inv(y)/stp)*stp).toFixed(2),ch=O.chain(st.w,st.t,STR[B.strat].type,B.exp);if(!ch.length)return;
+ const near=ch.reduce((a,c)=>Math.abs(c.K-K)<Math.abs(a.K-K)?c:a);const two=B.strat!=='csp'&&B.strat!=='cc';B[two?B.leg:'Ks']=near.K;renderPanel();draw()});
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{draw();drawPay()},120)});
+if(window.matchMedia)window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{draw();drawPay()});
+new MutationObserver(()=>{draw();drawPay()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------- journal and rulebook ---------- */
+function renderStats(){const el=$('stats');if(!J.length){el.innerHTML='<h3>Journal</h3><p class="note">No rounds yet. Each finished round is logged here with its process score and result, so you can see which strategies and setups you handle well. Gavin: review the process, not the dollar result.</p>';return}
+ const grp=(key,name)=>{const m={};J.forEach(r=>{const k=r[key];(m[k]=m[k]||[]).push(r)});return Object.keys(m).map(k=>{const a=m[k];return{k:name(k,a[0]),n:a.length,sc:a.reduce((x,r)=>x+r.score,0)/a.length,pl:a.reduce((x,r)=>x+r.pnl,0),wr:a.filter(r=>r.pnl>0).length/a.length}}).sort((a,b)=>a.sc-b.sc)};
+ const tbl=(rows,h)=>`<div class="scroll"><table><tr><th>${h}</th><th class="n">Rounds</th><th class="n">Avg process</th><th class="n">Win rate</th><th class="n">P/L</th></tr>${rows.map(r=>`<tr><td>${r.k}</td><td class="n">${r.n}</td><td class="n">${r.sc.toFixed(0)}</td><td class="n">${pct(r.wr)}</td><td class="n ${r.pl<0?'down':'up'}">${usd(r.pl)}</td></tr>`).join('')}</table></div>`;
+ el.innerHTML=`<h3>By strategy, weakest first</h3>${tbl(grp('strat',k=>STR[k].name),'Strategy')}<h3 style="margin-top:16px">By setup, weakest first</h3>${tbl(grp('sc',(k,r)=>r.title),'Setup')}
+ <h3 style="margin-top:16px">Last rounds</h3><div class="scroll"><table><tr><th>Setup</th><th>You chose</th><th class="n">Process</th><th class="n">P/L</th></tr>${J.slice(-25).reverse().map(r=>`<tr><td>${r.title}</td><td>${STR[r.strat].name}</td><td class="n">${r.score}</td><td class="n ${r.pnl<0?'down':r.pnl>0?'up':''}">${usd(r.pnl)}</td></tr>`).join('')}</table></div>
+ <div class="row"><button class="btn" id="wipe">Clear journal</button></div>`;
+ $('wipe').onclick=()=>{J=[];store.set('pd.journal',J);renderStats();renderKpis()}}
+$('rules').innerHTML=`
+<div><h3>Which strategy when</h3><div class="scroll"><table>
+<tr><th>Outlook</th><th>IV</th><th>Trade</th></tr>
+<tr><td>Mildly bullish</td><td>High or normal</td><td>Bull put spread</td></tr>
+<tr><td>Very bullish</td><td>Low</td><td>Bull call (debit) spread</td></tr>
+<tr><td>Mildly bearish</td><td>High or normal</td><td>Bear call spread</td></tr>
+<tr><td>Bearish</td><td>Low</td><td>Bear put (debit) spread</td></tr>
+<tr><td>Happy to own it</td><td>Elevated</td><td>Cash-secured put, then the wheel</td></tr>
+<tr><td>Backwardation</td><td>Any</td><td>Smaller size, debit spreads, or cash</td></tr></table></div>
+<p style="margin-top:8px">Credit spreads earn theta and forgive a small move against you. Debit spreads need you right on direction and timing.</p></div>
+<div><h3>Every trade</h3><ul><li>Never more than 5% of the account on one trade; about 3% is the comfortable middle.</li><li>Check the next earnings date before entering. Close premium-selling trades the day before.</li><li>VIX backwardation is the high-risk flag: stop adding premium selling.</li><li>Write the profit target, adjustment point and final stop before entry.</li><li>No stop orders on options. Set a price alert halfway between entry price and the short strike, then act by hand.</li><li>Review the process, not the dollar result.</li></ul></div>
+<div><h3>Credit spreads</h3><ul><li>Short strike 15-30 delta, below support (puts) or above resistance (calls).</li><li>30-45 DTE. No new trades under 21 DTE.</li><li>IV Rank above 50. Do not sell puts below the 200-day just because IV is high.</li><li>Credit at least about 11% of the risk ($50 on $450).</li><li>Take 50% of the credit in under half the time.</li><li>Adjust at the decision point or 25 delta: roll down or out for a credit. Two adjustments, then close.</li><li>Stop at 1.5-2x the credit. Out before expiration week. Never let the short strike go in the money.</li></ul></div>
+<div><h3>Debit spreads</h3><ul><li>Only when IV is low, for a hedge, or in backwardation.</li><li>Buy around 35 delta or closer to the money; 30-60 DTE.</li><li>Risk about half of what you can make. Stop at 50% of the debit.</li></ul></div>
+<div><h3>The wheel</h3><ul><li>Only stocks and ETFs you would hold for years; ETFs preferred. Above the 200-day.</li><li>Put at 25-35 delta, on a down day, 30-45 or 60-120 DTE, about 15% annualised or better.</li><li>One stock no more than about 15% of the account. Under $20,000, prefer credit spreads.</li><li>If assigned, sell calls above your assigned price. Never below cost basis. If nothing pays, wait or sell another put lower.</li><li>Take 50% on short puts. Roll for a credit, down and out, 2-3 rolls at most.</li><li>Reconsider if it breaks the 200-day or falls 20%.</li></ul></div>
+<div><h3>Covered calls</h3><ul><li>Decide the stock's job. Income: 25-35 delta. Keep the stock: 15-20 delta. Avoid the 40-delta zone on a keeper.</li><li>IV Rank above 50: go lower in delta. IV Rank near 20: take less, go longer, or skip the cycle.</li><li>30-45 DTE baseline. Check earnings.</li><li>Close at 50-70% of the premium.</li><li>In the money is not an emergency: check time premium, then let the shares go or roll out (or up and out) for a credit.</li></ul></div>`;
+
+/* ---------- boot ---------- */
+$('focus').value=P.focus;$('coach').setAttribute('aria-pressed',P.coach);$('coach').textContent=P.coach?'Coach on':'Coach off';
+window.PD={get st(){return st},start};
+start();
+})();
+</script>
